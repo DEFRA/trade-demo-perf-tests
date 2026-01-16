@@ -7,6 +7,11 @@ export class DefraIdStubClient {
   }
 
   async registerUser(userData) {
+    // Input validation
+    if (!userData || !userData.email) {
+      throw new Error('Email is required in userData');
+    }
+
     const payload = {
       email: userData.email,
       firstName: userData.firstName || 'K6',
@@ -43,14 +48,25 @@ export class DefraIdStubClient {
       const response = await fetch(url, options);
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        // Enhance error message with response body
+        let errorBody = '';
+        try {
+          errorBody = await response.text();
+        } catch (e) {
+          // Ignore if unable to read body
+        }
+        const errorMessage = `HTTP ${response.status}: ${response.statusText}${errorBody ? ` - ${errorBody}` : ''}`;
+        throw new Error(errorMessage);
       }
 
       return await response.json();
     } catch (error) {
       if (retries > 0) {
-        console.log(`Request failed, retrying... (${retries} attempts left)`);
-        await this._sleep(this.retryDelay);
+        // Calculate exponential backoff delay
+        const attemptNumber = this.maxRetries - retries;
+        const delay = this.retryDelay * Math.pow(2, attemptNumber);
+        console.log(`Request failed, retrying in ${delay}ms... (${retries} attempts left)`);
+        await this._sleep(delay);
         return this._fetchWithRetry(url, options, retries - 1);
       }
       throw error;
