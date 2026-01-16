@@ -23,7 +23,7 @@ playwright-report/
 playwright/.cache/
 
 # K6
-*.html
+/index.html
 summary.json
 users-pool.json
 
