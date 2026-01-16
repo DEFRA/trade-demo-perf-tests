@@ -1,0 +1,26 @@
+{
+  "name": "trade-demo-perf-tests",
+  "version": "1.0.0",
+  "description": "K6-based performance tests for trade-demo-frontend",
+  "type": "module",
+  "scripts": {
+    "playwright": "playwright test",
+    "playwright:debug": "playwright test --debug",
+    "playwright:ui": "playwright test --ui",
+    "playwright:codegen": "playwright codegen http://localhost:3000",
+    "generate:k6": "node scripts/convert-to-k6.js",
+    "setup:users": "node src/setup/create-user-pool.js",
+    "cleanup:users": "node src/setup/cleanup-user-pool.js",
+    "k6:local": "k6 run src/tests/notification-journey.js",
+    "test:full": "npm run setup:users && npm run k6:local; EXIT_CODE=$?; npm run cleanup:users; exit $EXIT_CODE"
+  },
+  "keywords": ["performance", "k6", "playwright", "load-testing"],
+  "author": "DEFRA",
+  "license": "OGL-UK-3.0",
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "playwright": "^1.48.0"
+  },
+  "dependencies": {
+  }
+}
