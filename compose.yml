@@ -1,10 +1,13 @@
 services:
   development:
     build: .
+    container_name: cdp-trade-demo-frontend-performance-tests
     volumes:
       - ./reports:/opt/perftest/reports
     depends_on:
-      service:
+      redis:
+        condition: service_healthy
+      localstack:
         condition: service_healthy
     env_file:
       - 'compose/aws.env'
@@ -16,10 +19,12 @@ services:
       SERVICE_PORT: 3000
       SERVICE_URL_SCHEME: http
     networks:
-      - performance-tests
+      - cdp-tenant
 
   localstack:
     image: localstack/localstack:4.3.0
+    container_name: cdp-localstack
+    profiles: ['infra','services','performance']
     ports:
       - '4566:4566' # LocalStack Gateway
       - '4510-4559:4510-4559' # external services port range
@@ -29,7 +34,7 @@ services:
     environment:
       DEBUG: ${DEBUG:-1}
       LS_LOG: WARN # Localstack DEBUG Level
-      SERVICES: s3, sqs, sns
+      SERVICES: s3,sqs,sns,cloudwatch,sts
       LOCALSTACK_HOST: 127.0.0.1
     volumes:
       - '${TMPDIR:-/tmp}/localstack:/var/lib/localstack'
@@ -40,43 +45,287 @@ services:
       start_period: 5s
       retries: 3
     networks:
-      - performance-tests
+      - cdp-tenant
 
   redis:
     image: redis:7.2.3-alpine3.18
+    container_name: cdp-redis
+    profiles: ['infra','services','performance']
     ports:
       - '6379:6379'
     restart: always
+    healthcheck:
+      test: [ 'CMD', 'redis-cli', 'ping' ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
     networks:
-      - performance-tests
+      - cdp-tenant
 
-  service:
-    # replace service-name with the name of your service being performace tested
-    image: defradigital/service-name:${SERVICE_VERSION:-latest}
+#  trade-demo-frontend:
+#    # replace service-name with the name of your service being performance tested
+#    image: defradigital/trade-demo-frontend:${SERVICE_VERSION:-latest}
+#    container_name: cdp-trade-demo-frontend
+#    ports:
+#      - '3000:3000'
+#    links:
+#      - 'localstack:localstack'
+#      - 'redis:redis'
+#    depends_on:
+#      localstack:
+#        condition: service_healthy
+#      defra-id-stub:
+#        condition: service_healthy
+#      trade-demo-backend:
+#        condition: service_healthy
+#      trade-commodity-codes:
+#        condition: service_healthy
+#    env_file:
+#      - 'compose/aws.env'
+#    environment:
+#      PORT: 3000
+#      NODE_ENV: development
+#      REDIS_HOST: redis
+#      USE_SINGLE_INSTANCE_CACHE: true
+#      DEFRA_ID_OIDC_CONFIGURATION_URL: http://localhost:3200/cdp-defra-id-stub/.well-known/openid-configuration
+#    healthcheck:
+#      test: ['CMD', 'curl', 'localhost:3000/health']
+#      interval: 5s
+#      start_period: 5s
+#      retries: 3
+#    networks:
+#      - cdp-tenant
+
+  postgres:
+    image: postgres:16
+    container_name: cdp-postgres
+    profiles: ['infra', 'services', 'performance']
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
     ports:
-      - '3000:3000'
-    links:
-      - 'localstack:localstack'
-      - 'redis:redis'
+      - '5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./compose/init-postgres.sh:/docker-entrypoint-initdb.d/init-postgres.sh
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'postgres']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - cdp-tenant
+
+  mongodb:
+    image: mongo:7.0
+    container_name: cdp-mongodb
+    profiles: ['infra', 'services', 'performance']
+    restart: always
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongodb-data:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--eval', 'db.adminCommand("ping")']
+      interval: 5s
+      start_period: 10s
+      retries: 3
+    networks:
+      - cdp-tenant
+
+  defra-id-stub:
+    image: defradigital/cdp-defra-id-stub:latest
+    container_name: cdp-defra-id-stub
+    profiles: ['infra', 'services', 'performance']
+    ports:
+      - '3200:3200'
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: 3200
+      REDIRECT_URLS: http://localhost:3000/auth/callback
+      OIDC_CLIENT_ID: ${DEFRA_ID_CLIENT_ID:-test-client}
+      OIDC_CLIENT_SECRET: ${DEFRA_ID_CLIENT_SECRET:-test-secret}
+      SERVICE_ID: ${DEFRA_ID_SERVICE_ID:-test-service}
+      USE_SINGLE_INSTANCE_CACHE: true
+      SESSION_CACHE_ENGINE: memory
+    networks:
+      - cdp-tenant
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'curl',
+          '-f',
+          'http://localhost:3200/cdp-defra-id-stub/.well-known/openid-configuration'
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  ################################################################################
+  # Application Services
+  ################################################################################
+
+  # Liquibase schema migrations for trade-commodity-codes
+
+  trade-commodity-codes-liquibase-schema:
+    image: liquibase/liquibase:4.32.0
+    container_name: cdp-trade-commodity-codes-liquibase-schema
+    profiles: ['services', 'performance']
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../trade-commodity-codes/changelog:/liquibase/changelog
+    command: >
+      --driver=org.postgresql.Driver
+      --changelog-file=changelog/db.changelog.xml
+      --url=jdbc:postgresql://postgres:5432/trade-commodity-codes
+      --username=postgres
+      --password=postgres
+      update
+    networks:
+      - cdp-tenant
+
+  trade-commodity-codes-liquibase-data:
+    image: liquibase/liquibase:4.32.0
+    container_name: cdp-trade-commodity-codes-liquibase-data
+    profiles: ["services", 'performance']
+    depends_on:
+      trade-commodity-codes-liquibase-schema:
+        condition: service_completed_successfully
+    volumes:
+      - ../trade-commodity-codes/data:/liquibase/data
+      - ../trade-commodity-codes/data/csv:/liquibase/data/csv
+    command: >
+      --driver=org.postgresql.Driver
+      --changelog-file=data/db.changelog.xml
+      --url=jdbc:postgresql://postgres:5432/trade-commodity-codes
+      --username=postgres
+      --password=postgres
+      update
+    networks:
+      - cdp-tenant
+
+  trade-commodity-codes:
+    build:
+      context: ../trade-commodity-codes
+      target: development
+    container_name: cdp-trade-commodity-codes
+    profiles: ['services', 'performance']
+    ports:
+      - '8086:8086'
+      - '5006:5005'
     depends_on:
       localstack:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
+      trade-commodity-codes-liquibase-schema:
+        condition: service_completed_successfully
+      trade-commodity-codes-liquibase-data:
+        condition: service_completed_successfully
+    volumes:
+      - ../trade-commodity-codes/changelog:/app/changelog
     env_file:
-      - 'compose/aws.env'
+      - './compose/aws.env'
     environment:
-      PORT: 3000
-      NODE_ENV: development
-      REDIS_HOST: redis
-      USE_SINGLE_INSTANCE_CACHE: true
-    healthcheck:
-      test: ['CMD', 'curl', 'localhost:3000/health']
-      interval: 5s
-      start_period: 5s
-      retries: 3
+      PORT: 8086
+      SERVICE_VERSION: 0.0.0-local
+      ENVIRONMENT: local
+
+      # PostgreSQL
+      POSTGRES_WRITE_HOSTNAME: postgres
+      POSTGRES_DATABASE: trade-commodity-codes
+
+      # AWS (via LocalStack)
+      LOCALSTACK_ENDPOINT: http://localstack:4566
+      AWS_REGION: eu-west-2
+      AWS_EMF_ENVIRONMENT: Local
+      AWS_EMF_NAMESPACE: trade-commodity-codes
+      AWS_EMF_SERVICE_TYPE: SpringBootApp
+      AWS_EMF_WRITE_TO_STDOUT: true
+
+      # Logging
+      LOG_LEVEL: DEBUG
+
+      # Metrics
+      ENABLE_METRICS: true
+
+      # Spring profile
+      SPRING_PROFILES_ACTIVE: local
+
+      # Liquibase
+      LIQUIBASE_CHANGELOG_PATH: changelog/db.changelog.xml
     networks:
-      - performance-tests
+      - cdp-tenant
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8086/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  trade-demo-backend:
+    build:
+      context: ../trade-demo-backend
+      target: development
+    container_name: cdp-trade-demo-backend
+    profiles: ['services', 'performance']
+    ports:
+      - '8085:8085'
+      - '5005:5005'
+    depends_on:
+      localstack:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    env_file:
+      - './compose/aws.env'
+    environment:
+      PORT: 8085
+      SERVICE_VERSION: 0.0.0-local
+      ENVIRONMENT: local
+
+      # MongoDB
+      MONGO_URI: mongodb://mongodb:27017
+      MONGO_DATABASE: trade-demo-backend
+
+      # AWS (via LocalStack)
+      LOCALSTACK_ENDPOINT: http://localstack:4566
+      AWS_REGION: eu-west-2
+
+      # Logging
+      LOG_LEVEL: DEBUG
+
+      # Metrics
+      ENABLE_METRICS: true
+
+      # Spring profile
+      SPRING_PROFILES_ACTIVE: local
+    networks:
+      - cdp-tenant
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8085/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  localstack-data:
+  postgres-data:
+  mongodb-data:
 
 networks:
-  performance-tests:
+  cdp-tenant:
     driver: bridge
+    name: cdp-tenant
+
 

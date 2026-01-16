@@ -19,10 +19,10 @@
       </ThreadGroup>
       <hashTree>
         <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Example HTTP Request">
-          <stringProp name="TestPlan.comments">Before running the suite, replace 'service-name' the name/url of the service to test. $env is set to the name of th environment the test is running in.</stringProp>
-          <stringProp name="HTTPSampler.domain">${__P(domain, service-name.${__P(env)}.cdp-int.defra.cloud)}</stringProp>
-          <stringProp name="HTTPSampler.protocol">${__P(protocol, https)}</stringProp>
+          <stringProp name="TestPlan.comments">Before running the suite, replace &apos;service-name&apos; the name/url of the service to test. $env is set to the name of th environment the test is running in.</stringProp>
+          <stringProp name="HTTPSampler.domain">${__P(domain, trade-demo-frontend.${__P(env)}.cdp-int.defra.cloud)}</stringProp>
           <stringProp name="HTTPSampler.port">${__P(port, 443)}</stringProp>
+          <stringProp name="HTTPSampler.protocol">${__P(protocol, https)}</stringProp>
           <stringProp name="HTTPSampler.path">/</stringProp>
           <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
           <stringProp name="HTTPSampler.method">GET</stringProp>
@@ -33,7 +33,7 @@
           </elementProp>
         </HTTPSamplerProxy>
         <hashTree>
-          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Response Assertion" enabled="true">
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Response Assertion">
             <collectionProp name="Asserion.test_strings">
               <stringProp name="49586">200</stringProp>
             </collectionProp>

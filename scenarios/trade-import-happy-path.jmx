@@ -6,16 +6,6 @@
       <boolProp name="TestPlan.tearDown_on_shutdown">true</boolProp>
       <elementProp name="TestPlan.user_defined_variables" elementType="Arguments" guiclass="ArgumentsPanel" testclass="Arguments" testname="User Defined Variables">
         <collectionProp name="Arguments.arguments">
-          <elementProp name="BASE_URL" elementType="Argument">
-            <stringProp name="Argument.name">BASE_URL</stringProp>
-            <stringProp name="Argument.value">http://localhost:3000</stringProp>
-            <stringProp name="Argument.metadata">=</stringProp>
-          </elementProp>
-          <elementProp name="DEFRA_ID_STUB_URL" elementType="Argument">
-            <stringProp name="Argument.name">DEFRA_ID_STUB_URL</stringProp>
-            <stringProp name="Argument.value">http://localhost:3200</stringProp>
-            <stringProp name="Argument.metadata">=</stringProp>
-          </elementProp>
           <elementProp name="TRACE_ID_PREFIX" elementType="Argument">
             <stringProp name="Argument.name">TRACE_ID_PREFIX</stringProp>
             <stringProp name="Argument.value">jmeter-test</stringProp>
@@ -29,8 +19,6 @@
           </elementProp>
         </collectionProp>
       </elementProp>
-      <boolProp name="TestPlan.functional_mode">false</boolProp>
-      <boolProp name="TestPlan.serialize_threadgroups">false</boolProp>
     </TestPlan>
     <hashTree>
       <CookieManager guiclass="CookiePanel" testclass="CookieManager" testname="HTTP Cookie Manager">
@@ -39,7 +27,7 @@
         <boolProp name="CookieManager.controlledByThreadGroup">false</boolProp>
       </CookieManager>
       <hashTree/>
-      <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="HTTP Header Manager" enabled="true">
+      <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="HTTP Header Manager">
         <collectionProp name="HeaderManager.headers">
           <elementProp name="" elementType="Header">
             <stringProp name="Header.name">Accept</stringProp>
@@ -56,7 +44,7 @@
         </collectionProp>
       </HeaderManager>
       <hashTree/>
-      <SetupThreadGroup guiclass="SetupThreadGroupGui" testclass="SetupThreadGroup" testname="setUp - Create User Pool" enabled="true">
+      <SetupThreadGroup guiclass="SetupThreadGroupGui" testclass="SetupThreadGroup" testname="setUp - Create User Pool">
         <intProp name="ThreadGroup.num_threads">1</intProp>
         <intProp name="ThreadGroup.ramp_time">1</intProp>
         <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
@@ -67,10 +55,10 @@
         </elementProp>
       </SetupThreadGroup>
       <hashTree>
-        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="POST Create User ${__jm__setUp - Create User Pool__idx}" enabled="true">
-          <stringProp name="HTTPSampler.domain">localhost</stringProp>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="POST Create User ${__jm__setUp - Create User Pool__idx}">
+          <stringProp name="HTTPSampler.domain">${__P(domain, cdp-defra-id-stub.${__P(env)}.cdp-int.defra.cloud)}</stringProp>
           <stringProp name="HTTPSampler.port">3200</stringProp>
-          <stringProp name="HTTPSampler.protocol">http</stringProp>
+          <stringProp name="HTTPSampler.protocol">${__P(protocol, https)}</stringProp>
           <stringProp name="HTTPSampler.path">/cdp-defra-id-stub/API/register</stringProp>
           <stringProp name="HTTPSampler.method">POST</stringProp>
           <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
@@ -165,85 +153,14 @@ log.info(&quot;Thread ${threadNum}, Iteration ${iteration} using user ${userInde
 </stringProp>
         </JSR223Sampler>
         <hashTree/>
-        <TransactionController guiclass="TransactionControllerGui" testclass="TransactionController" testname="1. User Creation via API (DISABLED - Using Pool)" enabled="false">
-          <boolProp name="TransactionController.includeTimers">false</boolProp>
-        </TransactionController>
-        <hashTree>
-          <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="POST User Registration (API)" enabled="true">
-            <stringProp name="HTTPSampler.domain">localhost</stringProp>
-            <stringProp name="HTTPSampler.port">3200</stringProp>
-            <stringProp name="HTTPSampler.protocol">http</stringProp>
-            <stringProp name="HTTPSampler.path">/cdp-defra-id-stub/API/register</stringProp>
-            <stringProp name="HTTPSampler.method">POST</stringProp>
-            <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
-            <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
-            <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
-              <collectionProp name="Arguments.arguments">
-                <elementProp name="" elementType="HTTPArgument">
-                  <boolProp name="HTTPArgument.always_encode">false</boolProp>
-                  <stringProp name="Argument.value">{&#xd;
-  &quot;email&quot;: &quot;jmeter.test.${__time(,)}.${__threadNum}@example.com&quot;,&#xd;
-  &quot;firstName&quot;: &quot;JMeter&quot;,&#xd;
-  &quot;lastName&quot;: &quot;TestUser&quot;,&#xd;
-  &quot;loa&quot;: &quot;1&quot;,&#xd;
-  &quot;enrolmentCount&quot;: 1,&#xd;
-  &quot;enrolmentRequestCount&quot;: 1,&#xd;
-  &quot;relationships&quot;: [&#xd;
-    {&#xd;
-      &quot;organisationName&quot;: &quot;JMeter Test Organization&quot;,&#xd;
-      &quot;relationshipRole&quot;: &quot;Employee&quot;&#xd;
-    }&#xd;
-  ]&#xd;
-}</stringProp>
-                  <stringProp name="Argument.metadata">=</stringProp>
-                </elementProp>
-              </collectionProp>
-            </elementProp>
-          </HTTPSamplerProxy>
-          <hashTree>
-            <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="JSON Content-Type" enabled="true">
-              <collectionProp name="HeaderManager.headers">
-                <elementProp name="" elementType="Header">
-                  <stringProp name="Header.name">Content-Type</stringProp>
-                  <stringProp name="Header.value">application/json</stringProp>
-                </elementProp>
-              </collectionProp>
-            </HeaderManager>
-            <hashTree/>
-            <JSONPostProcessor guiclass="JSONPostProcessorGui" testclass="JSONPostProcessor" testname="Extract User ID" enabled="true">
-              <stringProp name="JSONPostProcessor.referenceNames">USER_ID</stringProp>
-              <stringProp name="JSONPostProcessor.jsonPathExprs">$.userId</stringProp>
-              <stringProp name="JSONPostProcessor.match_numbers">1</stringProp>
-              <stringProp name="JSONPostProcessor.defaultValues">USER_ID_NOT_FOUND</stringProp>
-            </JSONPostProcessor>
-            <hashTree/>
-            <JSONPostProcessor guiclass="JSONPostProcessorGui" testclass="JSONPostProcessor" testname="Extract Email" enabled="true">
-              <stringProp name="JSONPostProcessor.referenceNames">USER_EMAIL</stringProp>
-              <stringProp name="JSONPostProcessor.jsonPathExprs">$.email</stringProp>
-              <stringProp name="JSONPostProcessor.match_numbers">1</stringProp>
-              <stringProp name="JSONPostProcessor.defaultValues">EMAIL_NOT_FOUND</stringProp>
-            </JSONPostProcessor>
-            <hashTree/>
-            <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="User Created (201)" enabled="true">
-              <collectionProp name="Asserion.test_strings">
-                <stringProp name="49587">201</stringProp>
-              </collectionProp>
-              <stringProp name="Assertion.custom_message"></stringProp>
-              <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
-              <boolProp name="Assertion.assume_success">false</boolProp>
-              <intProp name="Assertion.test_type">8</intProp>
-            </ResponseAssertion>
-            <hashTree/>
-          </hashTree>
-        </hashTree>
         <TransactionController guiclass="TransactionControllerGui" testclass="TransactionController" testname="1. Login via DEFRA ID" enabled="true">
           <boolProp name="TransactionController.includeTimers">false</boolProp>
         </TransactionController>
         <hashTree>
           <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="GET Login (Initiate OAuth)" enabled="true">
-            <stringProp name="HTTPSampler.domain">localhost</stringProp>
+            <stringProp name="HTTPSampler.domain">${__P(domain, trade-demo-frontend.${__P(env)}.cdp-int.defra.cloud)}</stringProp>
             <stringProp name="HTTPSampler.port">3000</stringProp>
-            <stringProp name="HTTPSampler.protocol">http</stringProp>
+            <stringProp name="HTTPSampler.protocol">${__P(protocol, https)}</stringProp>
             <stringProp name="HTTPSampler.path">/auth/login</stringProp>
             <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
             <stringProp name="HTTPSampler.method">GET</stringProp>
@@ -283,9 +200,9 @@ log.info(&quot;Thread ${threadNum}, Iteration ${iteration} using user ${userInde
             <hashTree/>
           </hashTree>
           <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="GET Authorize with User" enabled="true">
-            <stringProp name="HTTPSampler.domain">localhost</stringProp>
+            <stringProp name="HTTPSampler.domain">${__P(domain, trade-demo-frontend.${__P(env)}.cdp-int.defra.cloud)}</stringProp>
             <stringProp name="HTTPSampler.port">3200</stringProp>
-            <stringProp name="HTTPSampler.protocol">http</stringProp>
+            <stringProp name="HTTPSampler.protocol">${__P(protocol, https)}</stringProp>
             <stringProp name="HTTPSampler.path">${AUTHORIZE_LINK}</stringProp>
             <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
             <stringProp name="HTTPSampler.method">GET</stringProp>
@@ -313,9 +230,9 @@ log.info(&quot;Thread ${threadNum}, Iteration ${iteration} using user ${userInde
         </TransactionController>
         <hashTree>
           <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="GET Origin Page" enabled="true">
-            <stringProp name="HTTPSampler.domain">localhost</stringProp>
+            <stringProp name="HTTPSampler.domain">${__P(domain, trade-demo-frontend.${__P(env)}.cdp-int.defra.cloud)}</stringProp>
             <stringProp name="HTTPSampler.port">3000</stringProp>
-            <stringProp name="HTTPSampler.protocol">http</stringProp>
+            <stringProp name="HTTPSampler.protocol">${__P(protocol, https)}</stringProp>
             <stringProp name="HTTPSampler.path">/import/consignment/origin</stringProp>
             <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
             <stringProp name="HTTPSampler.method">GET</stringProp>
@@ -348,9 +265,9 @@ log.info(&quot;Thread ${threadNum}, Iteration ${iteration} using user ${userInde
             <hashTree/>
           </hashTree>
           <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="POST Origin Selection" enabled="true">
-            <stringProp name="HTTPSampler.domain">localhost</stringProp>
+            <stringProp name="HTTPSampler.domain">${__P(domain, trade-demo-frontend.${__P(env)}.cdp-int.defra.cloud)}</stringProp>
             <stringProp name="HTTPSampler.port">3000</stringProp>
-            <stringProp name="HTTPSampler.protocol">http</stringProp>
+            <stringProp name="HTTPSampler.protocol">${__P(protocol, https)}</stringProp>
             <stringProp name="HTTPSampler.path">/import/consignment/origin</stringProp>
             <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
             <stringProp name="HTTPSampler.method">POST</stringProp>
@@ -392,9 +309,9 @@ log.info(&quot;Thread ${threadNum}, Iteration ${iteration} using user ${userInde
         </TransactionController>
         <hashTree>
           <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="GET Commodity Codes Page" enabled="true">
-            <stringProp name="HTTPSampler.domain">localhost</stringProp>
+            <stringProp name="HTTPSampler.domain">${__P(domain, trade-demo-frontend.${__P(env)}.cdp-int.defra.cloud)}</stringProp>
             <stringProp name="HTTPSampler.port">3000</stringProp>
-            <stringProp name="HTTPSampler.protocol">http</stringProp>
+            <stringProp name="HTTPSampler.protocol">${__P(protocol, https)}</stringProp>
             <stringProp name="HTTPSampler.path">/import/commodity/codes</stringProp>
             <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
             <stringProp name="HTTPSampler.method">GET</stringProp>
@@ -406,9 +323,9 @@ log.info(&quot;Thread ${threadNum}, Iteration ${iteration} using user ${userInde
           </HTTPSamplerProxy>
           <hashTree/>
           <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="GET Search Commodity Code" enabled="true">
-            <stringProp name="HTTPSampler.domain">localhost</stringProp>
+            <stringProp name="HTTPSampler.domain">${__P(domain, trade-demo-frontend.${__P(env)}.cdp-int.defra.cloud)}</stringProp>
             <stringProp name="HTTPSampler.port">3000</stringProp>
-            <stringProp name="HTTPSampler.protocol">http</stringProp>
+            <stringProp name="HTTPSampler.protocol">${__P(protocol, https)}</stringProp>
             <stringProp name="HTTPSampler.path">/import/commodity/codes/search</stringProp>
             <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
             <stringProp name="HTTPSampler.method">GET</stringProp>
@@ -428,9 +345,9 @@ log.info(&quot;Thread ${threadNum}, Iteration ${iteration} using user ${userInde
           </HTTPSamplerProxy>
           <hashTree/>
           <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="GET Select Species" enabled="true">
-            <stringProp name="HTTPSampler.domain">localhost</stringProp>
+            <stringProp name="HTTPSampler.domain">${__P(domain, trade-demo-frontend.${__P(env)}.cdp-int.defra.cloud)}</stringProp>
             <stringProp name="HTTPSampler.port">3000</stringProp>
-            <stringProp name="HTTPSampler.protocol">http</stringProp>
+            <stringProp name="HTTPSampler.protocol">${__P(protocol, https)}</stringProp>
             <stringProp name="HTTPSampler.path">/import/commodity/codes/select</stringProp>
             <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
             <stringProp name="HTTPSampler.method">GET</stringProp>
@@ -455,9 +372,9 @@ log.info(&quot;Thread ${threadNum}, Iteration ${iteration} using user ${userInde
         </TransactionController>
         <hashTree>
           <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="GET Quantities Page" enabled="true">
-            <stringProp name="HTTPSampler.domain">localhost</stringProp>
+            <stringProp name="HTTPSampler.domain">${__P(domain, trade-demo-frontend.${__P(env)}.cdp-int.defra.cloud)}</stringProp>
             <stringProp name="HTTPSampler.port">3000</stringProp>
-            <stringProp name="HTTPSampler.protocol">http</stringProp>
+            <stringProp name="HTTPSampler.protocol">${__P(protocol, https)}</stringProp>
             <stringProp name="HTTPSampler.path">/import/commodity/codes/quantities</stringProp>
             <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
             <stringProp name="HTTPSampler.method">GET</stringProp>
@@ -469,9 +386,9 @@ log.info(&quot;Thread ${threadNum}, Iteration ${iteration} using user ${userInde
           </HTTPSamplerProxy>
           <hashTree/>
           <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="GET Save Quantities" enabled="true">
-            <stringProp name="HTTPSampler.domain">localhost</stringProp>
+            <stringProp name="HTTPSampler.domain">${__P(domain, trade-demo-frontend.${__P(env)}.cdp-int.defra.cloud)}</stringProp>
             <stringProp name="HTTPSampler.port">3000</stringProp>
-            <stringProp name="HTTPSampler.protocol">http</stringProp>
+            <stringProp name="HTTPSampler.protocol">${__P(protocol, https)}</stringProp>
             <stringProp name="HTTPSampler.path">/import/commodity/codes/quantities/save</stringProp>
             <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
             <stringProp name="HTTPSampler.method">GET</stringProp>
@@ -503,9 +420,9 @@ log.info(&quot;Thread ${threadNum}, Iteration ${iteration} using user ${userInde
         </TransactionController>
         <hashTree>
           <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="GET Purpose Page" enabled="true">
-            <stringProp name="HTTPSampler.domain">localhost</stringProp>
+            <stringProp name="HTTPSampler.domain">${__P(domain, trade-demo-frontend.${__P(env)}.cdp-int.defra.cloud)}</stringProp>
             <stringProp name="HTTPSampler.port">3000</stringProp>
-            <stringProp name="HTTPSampler.protocol">http</stringProp>
+            <stringProp name="HTTPSampler.protocol">${__P(protocol, https)}</stringProp>
             <stringProp name="HTTPSampler.path">/import/consignment/purpose</stringProp>
             <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
             <stringProp name="HTTPSampler.method">GET</stringProp>
@@ -528,9 +445,9 @@ log.info(&quot;Thread ${threadNum}, Iteration ${iteration} using user ${userInde
             <hashTree/>
           </hashTree>
           <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="POST Purpose Selection" enabled="true">
-            <stringProp name="HTTPSampler.domain">localhost</stringProp>
+            <stringProp name="HTTPSampler.domain">${__P(domain, trade-demo-frontend.${__P(env)}.cdp-int.defra.cloud)}</stringProp>
             <stringProp name="HTTPSampler.port">3000</stringProp>
-            <stringProp name="HTTPSampler.protocol">http</stringProp>
+            <stringProp name="HTTPSampler.protocol">${__P(protocol, https)}</stringProp>
             <stringProp name="HTTPSampler.path">/import/consignment/purpose</stringProp>
             <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
             <stringProp name="HTTPSampler.method">POST</stringProp>
@@ -579,9 +496,9 @@ log.info(&quot;Thread ${threadNum}, Iteration ${iteration} using user ${userInde
         </TransactionController>
         <hashTree>
           <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="GET Transport Page" enabled="true">
-            <stringProp name="HTTPSampler.domain">localhost</stringProp>
+            <stringProp name="HTTPSampler.domain">${__P(domain, trade-demo-frontend.${__P(env)}.cdp-int.defra.cloud)}</stringProp>
             <stringProp name="HTTPSampler.port">3000</stringProp>
-            <stringProp name="HTTPSampler.protocol">http</stringProp>
+            <stringProp name="HTTPSampler.protocol">${__P(protocol, https)}</stringProp>
             <stringProp name="HTTPSampler.path">/import/transport</stringProp>
             <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
             <stringProp name="HTTPSampler.method">GET</stringProp>
@@ -604,9 +521,9 @@ log.info(&quot;Thread ${threadNum}, Iteration ${iteration} using user ${userInde
             <hashTree/>
           </hashTree>
           <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="POST Transport Details" enabled="true">
-            <stringProp name="HTTPSampler.domain">localhost</stringProp>
+            <stringProp name="HTTPSampler.domain">${__P(domain, trade-demo-frontend.${__P(env)}.cdp-int.defra.cloud)}</stringProp>
             <stringProp name="HTTPSampler.port">3000</stringProp>
-            <stringProp name="HTTPSampler.protocol">http</stringProp>
+            <stringProp name="HTTPSampler.protocol">${__P(protocol, https)}</stringProp>
             <stringProp name="HTTPSampler.path">/import/transport</stringProp>
             <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
             <stringProp name="HTTPSampler.method">POST</stringProp>
@@ -676,9 +593,9 @@ log.info(&quot;Thread ${threadNum}, Iteration ${iteration} using user ${userInde
         </TransactionController>
         <hashTree>
           <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="GET Review Page" enabled="true">
-            <stringProp name="HTTPSampler.domain">localhost</stringProp>
+            <stringProp name="HTTPSampler.domain">${__P(domain, trade-demo-frontend.${__P(env)}.cdp-int.defra.cloud)}</stringProp>
             <stringProp name="HTTPSampler.port">3000</stringProp>
-            <stringProp name="HTTPSampler.protocol">http</stringProp>
+            <stringProp name="HTTPSampler.protocol">${__P(protocol, https)}</stringProp>
             <stringProp name="HTTPSampler.path">/import/review</stringProp>
             <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
             <stringProp name="HTTPSampler.method">GET</stringProp>
@@ -706,9 +623,9 @@ log.info(&quot;Thread ${threadNum}, Iteration ${iteration} using user ${userInde
         </TransactionController>
         <hashTree>
           <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="GET Logout" enabled="true">
-            <stringProp name="HTTPSampler.domain">localhost</stringProp>
+            <stringProp name="HTTPSampler.domain">${__P(domain, trade-demo-frontend.${__P(env)}.cdp-int.defra.cloud)}</stringProp>
             <stringProp name="HTTPSampler.port">3000</stringProp>
-            <stringProp name="HTTPSampler.protocol">http</stringProp>
+            <stringProp name="HTTPSampler.protocol">${__P(protocol, https)}</stringProp>
             <stringProp name="HTTPSampler.path">/auth/logout</stringProp>
             <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
             <stringProp name="HTTPSampler.method">GET</stringProp>
@@ -721,7 +638,7 @@ log.info(&quot;Thread ${threadNum}, Iteration ${iteration} using user ${userInde
           <hashTree/>
         </hashTree>
       </hashTree>
-      <PostThreadGroup guiclass="PostThreadGroupGui" testclass="PostThreadGroup" testname="tearDown - Delete User Pool">
+      <PostThreadGroup guiclass="PostThreadGroupGui" testclass="PostThreadGroup" testname="tearDown - Delete User Pool" enabled="true">
         <intProp name="ThreadGroup.num_threads">1</intProp>
         <intProp name="ThreadGroup.ramp_time">1</intProp>
         <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
@@ -733,9 +650,9 @@ log.info(&quot;Thread ${threadNum}, Iteration ${iteration} using user ${userInde
       </PostThreadGroup>
       <hashTree>
         <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="POST Delete User ${__jm__tearDown - Delete User Pool__idx}" enabled="true">
-          <stringProp name="HTTPSampler.domain">localhost</stringProp>
+          <stringProp name="HTTPSampler.domain">${__P(domain, cdp-defra-id-stub.${__P(env)}.cdp-int.defra.cloud)}</stringProp>
           <stringProp name="HTTPSampler.port">3200</stringProp>
-          <stringProp name="HTTPSampler.protocol">http</stringProp>
+          <stringProp name="HTTPSampler.protocol">${__P(protocol, https)}</stringProp>
           <stringProp name="HTTPSampler.path">/cdp-defra-id-stub/API/register/${__P(user.${__jm__tearDown - Delete User Pool__idx}.userId)}/expire</stringProp>
           <stringProp name="HTTPSampler.method">POST</stringProp>
           <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
