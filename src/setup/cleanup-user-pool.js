@@ -3,31 +3,56 @@
 import { DefraIdStubClient } from '../lib/defra-id-stub-client.js';
 import fs from 'fs';
 
-const VUS_MAX = parseInt(process.env.VUS_MAX || '50', 10);
-const USER_POOL_PREFIX = process.env.USER_POOL_PREFIX || 'k6-perf-user';
-const USER_POOL_DOMAIN = process.env.USER_POOL_DOMAIN || 'example.com';
 const DEFRA_ID_STUB_URL = process.env.DEFRA_ID_STUB_URL || 'http://localhost:3200';
 
 async function cleanupUserPool() {
-  console.log(`Cleaning up user pool (${VUS_MAX} users)...`);
+  console.log(`Cleaning up user pool...`);
   console.log(`DEFRA ID Stub URL: ${DEFRA_ID_STUB_URL}`);
+  console.log('Note: Users are expired via POST /API/register/{userId}/expire\n');
 
   const client = new DefraIdStubClient(DEFRA_ID_STUB_URL);
-  let deletedCount = 0;
+  let expiredCount = 0;
   let failedCount = 0;
+  let usersToClean = [];
 
-  for (let i = 1; i <= VUS_MAX; i++) {
-    const email = `${USER_POOL_PREFIX}-${i}@${USER_POOL_DOMAIN}`;
+  // Try to read users from users-pool.json first
+  const filePath = 'users-pool.json';
+  if (fs.existsSync(filePath)) {
+    try {
+      const fileContent = fs.readFileSync(filePath, 'utf8');
+      const poolData = JSON.parse(fileContent);
+      usersToClean = poolData.users || [];
+      console.log(`Found ${usersToClean.length} users in users-pool.json`);
+    } catch (error) {
+      console.warn(`Could not read users-pool.json: ${error.message}`);
+      console.warn('Fallback not available - userId required for expiry');
+    }
+  } else {
+    console.warn('users-pool.json not found');
+    console.warn('Cannot expire users without userId (stored in users-pool.json)');
+  }
+
+  // Expire users
+  for (let i = 0; i < usersToClean.length; i++) {
+    const user = usersToClean[i];
 
     try {
-      console.log(`[${i}/${VUS_MAX}] Attempting to delete user: ${email}`);
+      console.log(`[${i + 1}/${usersToClean.length}] Expiring user: ${user.email}`);
 
-      const result = await client.deleteUser(email);
+      if (!user.userId) {
+        console.warn(`  No userId found for ${user.email} - cannot expire (userId required)`);
+        failedCount++;
+        continue;
+      }
+
+      const result = await client.expireUser(user.userId);
 
       if (result.success) {
-        deletedCount++;
+        console.log(`  ✓ Expired ${user.email}`);
+        expiredCount++;
       } else {
-        console.warn(`Could not delete ${email}: ${result.message}`);
+        // console.warn(`  ✗ Could not expire ${user.email}: ${result.message}`);
+        console.warn(`  ✗ Could not expire ${user.email}`);
         failedCount++;
       }
 
@@ -35,15 +60,15 @@ async function cleanupUserPool() {
       await new Promise(resolve => setTimeout(resolve, 100));
 
     } catch (error) {
-      console.warn(`Error deleting user ${email}:`, error.message);
+      console.warn(`  ✗ Error expiring user ${user.email}:`, error.message);
       failedCount++;
     }
   }
 
   // Remove users-pool.json if it exists
-  if (fs.existsSync('users-pool.json')) {
+  if (fs.existsSync(filePath)) {
     try {
-      fs.unlinkSync('users-pool.json');
+      fs.unlinkSync(filePath);
       console.log('Removed users-pool.json');
     } catch (error) {
       console.warn(`Could not remove users-pool.json: ${error.message}`);
@@ -51,13 +76,12 @@ async function cleanupUserPool() {
   }
 
   console.log(`\nCleanup complete:`);
-  console.log(`  Deleted: ${deletedCount}`);
+  console.log(`  Expired: ${expiredCount}`);
   console.log(`  Failed: ${failedCount}`);
 
   // Don't fail the test if cleanup fails - it's best effort
   if (failedCount > 0) {
-    console.warn('\nNote: Some users could not be deleted. Manual cleanup may be required.');
-    console.warn('DEFRA ID stub may not support user deletion - users may accumulate in the stub.');
+    console.warn('\nNote: Some users could not be expired. Manual cleanup may be required.');
   }
 
   // Always exit 0 - cleanup failures shouldn't fail the test

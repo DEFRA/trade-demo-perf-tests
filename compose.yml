@@ -1,7 +1,8 @@
 services:
   development:
+    profiles: ['performance']
     build: .
-    container_name: cdp-trade-demo-frontend-performance-tests
+    container_name: trade-demo-frontend-performance-tests
     volumes:
       - ./reports:/opt/perftest/reports
     depends_on:
@@ -19,11 +20,11 @@ services:
       SERVICE_PORT: 3000
       SERVICE_URL_SCHEME: http
     networks:
-      - cdp-tenant
+      - performance-tests
 
   localstack:
     image: localstack/localstack:4.3.0
-    container_name: cdp-localstack
+    container_name: perf-localstack
     profiles: ['infra','services','performance']
     ports:
       - '4566:4566' # LocalStack Gateway
@@ -45,11 +46,11 @@ services:
       start_period: 5s
       retries: 3
     networks:
-      - cdp-tenant
+      - performance-tests
 
   redis:
     image: redis:7.2.3-alpine3.18
-    container_name: cdp-redis
+    container_name: perf-redis
     profiles: ['infra','services','performance']
     ports:
       - '6379:6379'
@@ -61,45 +62,74 @@ services:
       retries: 5
       start_period: 5s
     networks:
-      - cdp-tenant
+      - performance-tests
 
-#  trade-demo-frontend:
-#    # replace service-name with the name of your service being performance tested
-#    image: defradigital/trade-demo-frontend:${SERVICE_VERSION:-latest}
-#    container_name: cdp-trade-demo-frontend
-#    ports:
-#      - '3000:3000'
-#    links:
-#      - 'localstack:localstack'
-#      - 'redis:redis'
-#    depends_on:
-#      localstack:
-#        condition: service_healthy
-#      defra-id-stub:
-#        condition: service_healthy
-#      trade-demo-backend:
-#        condition: service_healthy
-#      trade-commodity-codes:
-#        condition: service_healthy
-#    env_file:
-#      - 'compose/aws.env'
-#    environment:
-#      PORT: 3000
-#      NODE_ENV: development
-#      REDIS_HOST: redis
-#      USE_SINGLE_INSTANCE_CACHE: true
-#      DEFRA_ID_OIDC_CONFIGURATION_URL: http://localhost:3200/cdp-defra-id-stub/.well-known/openid-configuration
-#    healthcheck:
-#      test: ['CMD', 'curl', 'localhost:3000/health']
-#      interval: 5s
-#      start_period: 5s
-#      retries: 3
-#    networks:
-#      - cdp-tenant
+  trade-demo-frontend:
+    build:
+      context: ../trade-demo-frontend
+      target: development
+    container_name: perf-trade-demo-frontend
+    profiles: ['services', 'performance']
+    ports:
+      - '3000:3000'
+      - '9229:9229'
+    depends_on:
+      redis:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+      defra-id-stub:
+        condition: service_healthy
+      trade-demo-backend:
+        condition: service_healthy
+      trade-commodity-codes:
+        condition: service_healthy
+    env_file:
+      - 'compose/aws.env'
+    environment:
+      PORT: 3000
+      NODE_ENV: development
+
+      # Redis - use service name
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SESSION_CACHE_ENGINE: redis
+      USE_SINGLE_INSTANCE_CACHE: true
+      REDIS_TLS: false
+
+      # DEFRA ID - use service name instead of localhost
+      DEFRA_ID_OIDC_CONFIGURATION_URL: http://defra-id-stub:3200/cdp-defra-id-stub/.well-known/openid-configuration
+      DEFRA_ID_CLIENT_ID: test-client
+      DEFRA_ID_CLIENT_SECRET: test-secret
+      DEFRA_ID_SERVICE_ID: test-service
+      DEFRA_ID_STUB_URL: http://defra-id-stub:3200
+
+      # Backend APIs - use service names
+      BACKEND_API_URL: http://trade-demo-backend:8085
+      COMMODITY_CODE_API_URL: http://trade-commodity-codes:8086
+
+      # OAuth callback URL - uses localhost because browser redirects
+      APP_BASE_URL: http://localhost:3000
+
+      # Logging
+      LOG_LEVEL: debug
+      LOG_FORMAT: pino-pretty
+
+      # Security (relaxed for local)
+      ENABLE_SECURE_CONTEXT: false
+      ENABLE_METRICS: false
+    networks:
+      - performance-tests
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3000/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   postgres:
     image: postgres:16
-    container_name: cdp-postgres
+    container_name: perf-postgres
     profiles: ['infra', 'services', 'performance']
     restart: always
     environment:
@@ -117,11 +147,11 @@ services:
       timeout: 3s
       retries: 5
     networks:
-      - cdp-tenant
+      - performance-tests
 
   mongodb:
     image: mongo:7.0
-    container_name: cdp-mongodb
+    container_name: perf-mongodb
     profiles: ['infra', 'services', 'performance']
     restart: always
     ports:
@@ -134,11 +164,11 @@ services:
       start_period: 10s
       retries: 3
     networks:
-      - cdp-tenant
+      - performance-tests
 
   defra-id-stub:
     image: defradigital/cdp-defra-id-stub:latest
-    container_name: cdp-defra-id-stub
+    container_name: perf-defra-id-stub
     profiles: ['infra', 'services', 'performance']
     ports:
       - '3200:3200'
@@ -147,14 +177,16 @@ services:
         condition: service_healthy
     environment:
       PORT: 3200
-      REDIRECT_URLS: http://localhost:3000/auth/callback
+      DEFRA_ID_STUB_URL: http://defra-id-stub:3200
+      APP_BASE_URL: http://defra-id-stub:3200
+      REDIRECT_URLS: http://trade-demo-frontend:3000/auth/callback,http://localhost:3000/auth/callback
       OIDC_CLIENT_ID: ${DEFRA_ID_CLIENT_ID:-test-client}
       OIDC_CLIENT_SECRET: ${DEFRA_ID_CLIENT_SECRET:-test-secret}
       SERVICE_ID: ${DEFRA_ID_SERVICE_ID:-test-service}
       USE_SINGLE_INSTANCE_CACHE: true
       SESSION_CACHE_ENGINE: memory
     networks:
-      - cdp-tenant
+      - performance-tests
     healthcheck:
       test:
         [
@@ -176,7 +208,7 @@ services:
 
   trade-commodity-codes-liquibase-schema:
     image: liquibase/liquibase:4.32.0
-    container_name: cdp-trade-commodity-codes-liquibase-schema
+    container_name: perf-trade-commodity-codes-liquibase-schema
     profiles: ['services', 'performance']
     depends_on:
       postgres:
@@ -191,11 +223,11 @@ services:
       --password=postgres
       update
     networks:
-      - cdp-tenant
+      - performance-tests
 
   trade-commodity-codes-liquibase-data:
     image: liquibase/liquibase:4.32.0
-    container_name: cdp-trade-commodity-codes-liquibase-data
+    container_name: perf-trade-commodity-codes-liquibase-data
     profiles: ["services", 'performance']
     depends_on:
       trade-commodity-codes-liquibase-schema:
@@ -211,13 +243,13 @@ services:
       --password=postgres
       update
     networks:
-      - cdp-tenant
+      - performance-tests
 
   trade-commodity-codes:
     build:
       context: ../trade-commodity-codes
       target: development
-    container_name: cdp-trade-commodity-codes
+    container_name: perf-trade-commodity-codes
     profiles: ['services', 'performance']
     ports:
       - '8086:8086'
@@ -264,7 +296,7 @@ services:
       # Liquibase
       LIQUIBASE_CHANGELOG_PATH: changelog/db.changelog.xml
     networks:
-      - cdp-tenant
+      - performance-tests
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:8086/health']
       interval: 10s
@@ -276,7 +308,7 @@ services:
     build:
       context: ../trade-demo-backend
       target: development
-    container_name: cdp-trade-demo-backend
+    container_name: perf-trade-demo-backend
     profiles: ['services', 'performance']
     ports:
       - '8085:8085'
@@ -310,7 +342,7 @@ services:
       # Spring profile
       SPRING_PROFILES_ACTIVE: local
     networks:
-      - cdp-tenant
+      - performance-tests
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:8085/health']
       interval: 10s
@@ -324,8 +356,8 @@ volumes:
   mongodb-data:
 
 networks:
-  cdp-tenant:
+  performance-tests:
     driver: bridge
-    name: cdp-tenant
+    name: performance-tests
 
 

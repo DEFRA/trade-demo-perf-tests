@@ -2,6 +2,7 @@
 
 import { DefraIdStubClient } from '../lib/defra-id-stub-client.js';
 import fs from 'fs';
+import crypto from 'crypto';
 
 const VUS_MAX = parseInt(process.env.VUS_MAX || '50', 10);
 const USER_POOL_PREFIX = process.env.USER_POOL_PREFIX || 'k6-perf-user';
@@ -40,11 +41,17 @@ async function createUserPool() {
       console.log(`[${i}/${VUS_MAX}] Creating user: ${email}`);
 
       const result = await client.registerUser({
+        userId: crypto.randomUUID(),
         email,
         firstName: 'K6',
         lastName: `PerfUser${i}`,
-        loa: '1'
+        loa: '1',
+        aal: '1',
+        enrolmentCount: '1',
+        enrolmentRequestCount: '1'
       });
+
+      console.log(`  User created: ${email}`);
 
       users.push({
         email,

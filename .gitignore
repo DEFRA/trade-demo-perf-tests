@@ -26,6 +26,10 @@ playwright/.cache/
 /index.html
 summary.json
 users-pool.json
+*.html
+*.log
+*.txt
+
 
 # IDE
 *.swp

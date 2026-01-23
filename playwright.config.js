@@ -13,6 +13,14 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
+    // Record HAR file for network traffic analysis
+    ...(process.env.RECORD_HAR && {
+      recordHar: {
+        path: './network-capture.har',
+        mode: 'full',
+        content: 'attach',
+      },
+    }),
   },
 
   projects: [

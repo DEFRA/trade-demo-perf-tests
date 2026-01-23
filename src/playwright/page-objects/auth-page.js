@@ -12,17 +12,20 @@ export class AuthPage {
   }
 
   async selectUser(email) {
-    // In DEFRA ID stub, click the user by email
-    // The stub typically shows a list of users - use text locator
-    await this.page.getByText(email).click();
+    // In DEFRA ID stub, click the login link for the user
+    // Find the row containing the email, then click the login link within it
+    await this.page.getByRole('link', { name: new RegExp(email, 'i') })
+      .or(this.page.locator(`a:has-text("${email}")`))
+      .or(this.page.getByText(email).locator('..').getByRole('link', { name: /Log in/i }))
+      .click();
 
     // Wait for redirect back to application (no longer on stub)
     await this.page.waitForURL(/^(?!.*cdp-defra-id-stub).*/);
   }
 
-  async verifyAuthenticated(expectedName = 'K6') {
+  async verifyAuthenticated(email) {
     // Verify user name appears - check for sign out link nearby
-    const header = this.page.locator('header').or(this.page.locator('.govuk-header'));
-    await header.getByText(expectedName).waitFor({ state: 'visible' });
+    const header = this.page.locator('.app-service-header');
+    await header.getByText(email).waitFor({ state: 'visible' });
   }
 }

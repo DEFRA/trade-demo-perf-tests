@@ -1,3 +1,5 @@
+import { randomUUID } from 'crypto';
+
 export class DefraIdStubClient {
   constructor(baseUrl = process.env.DEFRA_ID_STUB_URL || 'http://localhost:3200') {
     this.baseUrl = baseUrl;
@@ -12,17 +14,24 @@ export class DefraIdStubClient {
       throw new Error('Email is required in userData');
     }
 
+    // Generate a proper UUID for userId
+    const userId = userData.userId || randomUUID();
+
     const payload = {
+      userId: userId,
       email: userData.email,
       firstName: userData.firstName || 'K6',
       lastName: userData.lastName || 'PerfUser',
       loa: userData.loa || '1',
+      aal: userData.aal || '1',
       enrolmentCount: 1,
       enrolmentRequestCount: 1,
       relationships: [
         {
           organisationName: 'K6 Performance Test Organization',
-          relationshipRole: 'Employee'
+          relationshipRole: 'Employee',
+          roleName: 'Performance Tester',
+          roleStatus: '1'
         }
       ]
     };
@@ -36,11 +45,44 @@ export class DefraIdStubClient {
     });
   }
 
-  async deleteUser(email) {
-    // Note: DEFRA ID stub may not have a delete endpoint
-    // This is a placeholder for future implementation
-    console.warn('Delete user not implemented in DEFRA ID stub');
-    return { success: false, message: 'Delete endpoint not available' };
+  async expireUser(userId) {
+    // DEFRA ID stub expire endpoint: POST /cdp-defra-id-stub/API/register/{userId}/expire
+    const expireEndpoint = `${this.baseUrl}/cdp-defra-id-stub/API/register/${userId}/expire`;
+
+    try {
+      const response = await fetch(expireEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        let errorBody = '';
+        try {
+          errorBody = await response.text();
+        } catch (e) {
+          // Ignore if unable to read body
+        }
+        return {
+          success: false,
+          message: `HTTP ${response.status}: ${response.statusText}${errorBody ? ` - ${errorBody}` : ''}`
+        };
+      }
+
+      // Check if response has content
+      let result;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        result = await response.json();
+      } else {
+        result = { message: 'User expired' };
+      }
+
+      return { success: true, message: 'User expired successfully', data: result };
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
   }
 
   async _fetchWithRetry(url, options, retries = this.maxRetries) {

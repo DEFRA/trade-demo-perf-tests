@@ -19,7 +19,10 @@ test.describe('Notification Journey', () => {
     await authPage.selectUser(testUserEmail);
 
     // Assert - Verify authentication
-    await authPage.verifyAuthenticated('K6');
+    await authPage.verifyAuthenticated(testUserEmail);
+
+    // Act - Navigate to dashboard
+    await dashboardPage.navigate();
 
     // Act - Start new import notification
     await dashboardPage.clickNewImport();
@@ -32,7 +35,7 @@ test.describe('Notification Journey', () => {
     await notificationPages.selectCommodityRefinement('Bison bison');
 
     // Act - Fill commodity quantities
-    await notificationPages.fillCommodityQuantities('100');
+    await notificationPages.fillCommodityQuantities('100', '10');
 
     // Act - Fill purpose
     await notificationPages.fillPurpose();
@@ -41,43 +44,47 @@ test.describe('Notification Journey', () => {
     await notificationPages.fillTransport();
 
     // Assert - We should now be on Review page
-    await expect(page.getByRole('heading', { name: /review/i }))
-      .or(page.getByText(/check your answers/i))
+    await expect(page.getByRole('heading', { name: /review/i })
+      .or(page.getByText(/check your answers/i)))
       .toBeVisible();
 
     // Act - Change commodity quantities
     await notificationPages.clickChangeCommodity();
 
     // Act - Update quantities with new random values
-    const newQuantity = Math.floor(Math.random() * 500) + 1;
-    await notificationPages.fillCommodityQuantities(newQuantity.toString());
+    const newAnimals = Math.floor(Math.random() * 500) + 1;
+    const newPacks = Math.floor(Math.random() * 50) + 1;
+    await notificationPages.fillCommodityQuantities(newAnimals.toString(), newPacks.toString());
 
     // Act - Navigate through Purpose and Transport pages back to Review
     await notificationPages.saveAndContinueThroughPages();
 
     // Assert - Back on Review page
-    await expect(page.getByRole('heading', { name: /review/i }))
-      .or(page.getByText(/check your answers/i))
+    await expect(page.getByRole('heading', { name: /review/i })
+      .or(page.getByText(/check your answers/i)))
       .toBeVisible();
 
     // Act - Save as draft
     await notificationPages.saveAsDraft();
 
     // Assert - Draft saved confirmation
-    await expect(page.getByText(/saved/i).or(page.getByText(/draft/i)))
+    await expect(page.getByText('Your draft has been saved.'))
       .toBeVisible();
 
     // Act - Submit notification
     await notificationPages.submitNotification();
 
-    // Assert - Verify confirmation
-    await notificationPages.verifyConfirmation();
+    // Assert - Verify confirmation and capture notification ID
+    const notificationId = await notificationPages.verifyConfirmation();
+
+    // Convert CDP ID to CHED reference (matches backend logic)
+    const chedReference = notificationPages.generateChedReference(notificationId);
 
     // Act - Return to dashboard
     await notificationPages.returnToDashboard();
 
-    // Assert - Verify notification appears in list
-    await dashboardPage.verifyNotificationInList();
+    // Assert - Verify notification appears in list with CHED reference
+    await dashboardPage.verifyNotificationInList(chedReference);
   });
 
   test('Create import notification with minimal data', async ({ page }) => {
@@ -94,7 +101,10 @@ test.describe('Notification Journey', () => {
     await authPage.selectUser(testUserEmail);
 
     // Assert
-    await authPage.verifyAuthenticated('K6');
+    await authPage.verifyAuthenticated(testUserEmail);
+
+    // Act - Navigate to dashboard
+    await dashboardPage.navigate();
 
     // Act - Create notification
     await dashboardPage.clickNewImport();
@@ -106,8 +116,8 @@ test.describe('Notification Journey', () => {
     await notificationPages.fillTransport();
 
     // Assert - On review page
-    await expect(page.getByRole('heading', { name: /review/i }))
-      .or(page.getByText(/check your answers/i))
+    await expect(page.getByRole('heading', { name: /review/i })
+      .or(page.getByText(/check your answers/i)))
       .toBeVisible();
 
     // Act - Submit directly
