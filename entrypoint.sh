@@ -1,55 +1,67 @@
-#!/bin/sh
-set -x
+#!/usr/bin/env bash
 
 echo "run_id: $RUN_ID in $ENVIRONMENT"
 
-NOW=$(date +"%Y%m%d-%H%M%S")
+K6_HOME=/opt/perftest
+K6_REPORT=index.html
+K6_SUMMARY=summary.json
 
-if [ -z "${JM_HOME}" ]; then
-  JM_HOME=/opt/perftest
+export HTTPS_PROXY=http://localhost:3128
+
+# Validate VUS_MAX matches pool size
+VUS_MAX=${VUS_MAX:-50}
+echo "Configured for ${VUS_MAX} virtual users"
+
+# Setup: Create user pool
+echo "=== Setup: Creating user pool ==="
+node ${K6_HOME}/src/setup/create-user-pool.js
+setup_exit_code=$?
+
+if [ $setup_exit_code -ne 0 ]; then
+  echo "ERROR: User pool creation failed"
+  exit $setup_exit_code
 fi
 
-JM_SCENARIOS=${JM_HOME}/scenarios
-JM_REPORTS=${JM_HOME}/reports
-JM_LOGS=${JM_HOME}/logs
+# Run k6 test
+echo "=== Running k6 performance test ==="
+k6 run \
+  -e TARGET_URL=${TARGET_URL:-https://trade-demo-frontend.${ENVIRONMENT}.cdp-int.defra.cloud} \
+  -e VUS_MAX=${VUS_MAX} \
+  -e RAMP_UP_DURATION=${RAMP_UP_DURATION:-5m} \
+  -e HOLD_DURATION=${HOLD_DURATION:-10m} \
+  -e RAMP_DOWN_DURATION=${RAMP_DOWN_DURATION:-2m} \
+  -e THRESHOLD_P95_MS=${THRESHOLD_P95_MS:-3000} \
+  -e THRESHOLD_P99_MS=${THRESHOLD_P99_MS:-5000} \
+  -e THRESHOLD_ERROR_RATE=${THRESHOLD_ERROR_RATE:-0.01} \
+  -e DEFRA_ID_STUB_URL=${DEFRA_ID_STUB_URL:-http://defra-id-stub:3200} \
+  ${K6_HOME}/src/tests/notification-journey.js \
+  --summary-export=${K6_SUMMARY}
+test_exit_code=$?
 
-mkdir -p ${JM_REPORTS} ${JM_LOGS}
+# Teardown: Cleanup user pool (always run, even if test failed)
+echo "=== Teardown: Cleaning up user pool ==="
+node ${K6_HOME}/src/setup/cleanup-user-pool.js
+cleanup_exit_code=$?
 
-TEST_SCENARIO=${TEST_SCENARIO:-test}
-SCENARIOFILE=${JM_SCENARIOS}/${TEST_SCENARIO}.jmx
-REPORTFILE=${NOW}-perftest-${TEST_SCENARIO}-report.csv
-LOGFILE=${JM_LOGS}/perftest-${TEST_SCENARIO}.log
+if [ $cleanup_exit_code -ne 0 ]; then
+  echo "WARNING: User pool cleanup had issues (non-fatal)"
+fi
 
-# Before running the suite, replace 'service-name' with the name/url of the service to test.
-# ENVIRONMENT is set to the name of th environment the test is running in.
-SERVICE_ENDPOINT=${SERVICE_ENDPOINT:-service-name.${ENVIRONMENT}.cdp-int.defra.cloud}
-# PORT is used to set the port of this performance test container
-SERVICE_PORT=${SERVICE_PORT:-443}
-SERVICE_URL_SCHEME=${SERVICE_URL_SCHEME:-https}
-
-# Run the test suite
-jmeter -n -t ${SCENARIOFILE} -e -l "${REPORTFILE}" -o ${JM_REPORTS} -j ${LOGFILE} -f \
--Jenv="${ENVIRONMENT}" \
--Jdomain="${SERVICE_ENDPOINT}" \
--Jport="${SERVICE_PORT}" \
--Jprotocol="${SERVICE_URL_SCHEME}"
-
-# Publish the results into S3 so they can be displayed in the CDP Portal
+# Publish results to S3
 if [ -n "$RESULTS_OUTPUT_S3_PATH" ]; then
-  # Copy the CSV report file and the generated report files to the S3 bucket
-   if [ -f "$JM_REPORTS/index.html" ]; then
-      aws --endpoint-url=$S3_ENDPOINT s3 cp "$REPORTFILE" "$RESULTS_OUTPUT_S3_PATH/$REPORTFILE"
-      aws --endpoint-url=$S3_ENDPOINT s3 cp "$JM_REPORTS" "$RESULTS_OUTPUT_S3_PATH" --recursive
-      if [ $? -eq 0 ]; then
-        echo "CSV report file and test results published to $RESULTS_OUTPUT_S3_PATH"
-      fi
-   else
-      echo "$JM_REPORTS/index.html is not found"
-      exit 1
-   fi
+  if [ -f "$K6_REPORT" -a -f "$K6_SUMMARY" ]; then
+    echo "=== Publishing results to S3 ==="
+    aws --endpoint-url=$S3_ENDPOINT s3 cp "$K6_REPORT" "$RESULTS_OUTPUT_S3_PATH/$K6_REPORT"
+    aws --endpoint-url=$S3_ENDPOINT s3 cp "$K6_SUMMARY" "$RESULTS_OUTPUT_S3_PATH/$K6_SUMMARY"
+    if [ $? -eq 0 ]; then
+      echo "HTML and summary report files published to $RESULTS_OUTPUT_S3_PATH"
+    fi
+  else
+    echo "WARNING: $K6_REPORT or $K6_SUMMARY not found"
+  fi
 else
-   echo "RESULTS_OUTPUT_S3_PATH is not set"
-   exit 1
+  echo "RESULTS_OUTPUT_S3_PATH is not set - skipping S3 upload (OK for local runs)"
 fi
 
+# Exit with k6's exit code to preserve pass/fail status
 exit $test_exit_code

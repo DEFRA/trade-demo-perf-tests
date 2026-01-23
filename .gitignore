@@ -13,3 +13,24 @@ coverage
 jmeter.log
 report.csv
 reports/
+
+# Node
+package-lock.json
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
+
+# K6
+/index.html
+summary.json
+users-pool.json
+*.html
+*.log
+*.txt
+
+
+# IDE
+*.swp
+*.swo

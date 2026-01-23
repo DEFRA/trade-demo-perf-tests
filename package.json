@@ -1,0 +1,38 @@
+{
+  "name": "trade-demo-perf-tests",
+  "version": "1.0.0",
+  "description": "K6-based performance tests for trade-demo-frontend",
+  "type": "module",
+  "scripts": {
+    "playwright": "playwright test",
+    "playwright:debug": "playwright test --debug",
+    "playwright:ui": "playwright test --ui",
+    "playwright:codegen": "playwright codegen http://localhost:3000",
+    "playwright:capture": "playwright test src/playwright/capture-network.spec.js",
+    "playwright:capture:har": "RECORD_HAR=1 playwright test src/playwright/capture-network.spec.js",
+    "parse:network-log": "node scripts/parse-network-log.js",
+    "generate:k6": "node scripts/convert-to-k6.js",
+    "setup:users": "node src/setup/create-user-pool.js",
+    "cleanup:users": "node src/setup/cleanup-user-pool.js",
+    "capture:sessions": "node scripts/capture-session-cookies.js",
+    "k6:local": "k6 run src/tests/notification-journey.js",
+    "k6:new": "k6 run src/tests/trade-import-notification.js",
+    "test:full": "npm run setup:users && npm run capture:sessions && npm run k6:local; EXIT_CODE=$?; npm run cleanup:users; exit $EXIT_CODE",
+    "test:new": "npm run setup:users && npm run k6:new; EXIT_CODE=$?; npm run cleanup:users; exit $EXIT_CODE"
+  },
+  "keywords": [
+    "performance",
+    "k6",
+    "playwright",
+    "load-testing"
+  ],
+  "author": "DEFRA",
+  "license": "OGL-UK-3.0",
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "playwright": "^1.48.0"
+  },
+  "dependencies": {
+    "k6": "^0.0.0"
+  }
+}
