@@ -3,8 +3,18 @@
 // Purpose: End-to-end load test with live DEFRA ID authentication
 
 import http from 'k6/http';
-import { check, sleep } from 'k6';
+import { check } from 'k6';
 import { Counter, Trend } from 'k6/metrics';
+import { TestingError, AuthenticationError } from './exceptions.js';
+import { env, getK6Options, getUserEmail } from '../config/test-config.js';
+import { HomePage } from '../pages/home-page.js';
+import { DashboardPage } from '../pages/dashboard-page.js';
+import { OriginPage } from '../pages/origin-page.js';
+import { CommodityPage } from '../pages/commodity-page.js';
+import { PurposePage } from '../pages/purpose-page.js';
+import { TransportPage } from '../pages/transport-page.js';
+import { ReviewPage } from '../pages/review-page.js';
+import { generateImportNotificationData } from '../data/test-data.js';
 
 // Custom metrics
 const journeyDuration = new Trend('notification_journey_duration');
@@ -15,74 +25,11 @@ const submitDuration = new Trend('submit_duration');
 const failedJourneys = new Counter('failed_journeys');
 const authFailures = new Counter('auth_failures');
 
-// Environment configuration
-const BASE_URL = __ENV.TARGET_URL || 'http://localhost:3000';
-const DEFRA_ID_STUB_URL = __ENV.DEFRA_ID_STUB_URL || 'http://localhost:3200';
-const USER_POOL_PREFIX = __ENV.USER_POOL_PREFIX || 'k6-perf-user';
-const USER_POOL_DOMAIN = __ENV.USER_POOL_DOMAIN || 'example.com';
-
 // K6 test configuration
-export const options = {
-  scenarios: {
-    ramp_up_load: {
-      executor: 'ramping-vus',
-      startVUs: 1,
-      stages: [
-        { duration: __ENV.RAMP_UP_DURATION || '5m', target: parseInt(__ENV.VUS_MAX || '50') },
-        { duration: __ENV.HOLD_DURATION || '10m', target: parseInt(__ENV.VUS_MAX || '50') },
-        { duration: __ENV.RAMP_DOWN_DURATION || '2m', target: 0 },
-      ],
-    },
-  },
-  thresholds: {
-    'http_req_duration': [
-      `p(95)<${__ENV.THRESHOLD_P95_MS || '3000'}`,
-      `p(99)<${__ENV.THRESHOLD_P99_MS || '5000'}`
-    ],
-    'http_req_failed': [`rate<${__ENV.THRESHOLD_ERROR_RATE || '0.01'}`],
-    'checks': ['rate>0.95'],
-    'auth_failures': ['count<5'],
-    'failed_journeys': [`count<${parseInt(__ENV.VUS_MAX || '50') * 0.05}`], // Max 5% failed journeys
-  },
-};
-
-// Helper: Create a testing flow error
-function TestingError(message) {
-  this.name = 'TestingError';
-  this.message = message || '';
-  var error = new Error(this.message);
-  error.name = this.name;
-  this.stack = error.stack;
-}
-// Helper: create an authentication error
-function AuthenticationError(message) {
-  this.name = 'TestingError';
-  this.message = message || '';
-  var error = new Error(this.message);
-  error.name = this.name;
-  this.stack = error.stack;
-}
+export const options = getK6Options();
 
 TestingError.prototype = Object.create(Error.prototype);
 AuthenticationError.prototype = Object.create(Error.prototype);
-
-const countryCodes = ['AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI', 'ES', 'SE', 'US', 'CS', 'AU', 'NZ', 'NO', 'CH', 'IS', 'JP', 'CN', 'IN', 'BR', 'AR', 'ZA'];
-const internalMarketPurposes =['Commercial Sale','Rescue','Breeding','Research','Racing or Competition','Companion Animal not for Resale or Rehoming','Production','Slaughter','Fattening','Game Restocking'];
-
-// Helper: Extract the crumb from the form body
-function extractCrumbFromBody(body) {
-  let crumbElement = body.match(/<input[^>]*name=["']crumb["'][^>]*>/i);
-  if (!crumbElement) {
-    console.warn('✗ Could not find <input name="crumb"> in HTML');
-    return null;
-  }
-  let crumb = crumbElement[0].match(/value=["']([^"']*)["']/i);
-  if (!crumb || !crumb[1]) {
-    console.warn('✗ Found crumb input but no value attribute');
-    return null;
-  }
-  return crumb[1];
-}
 
 // Helper: Authenticate user via DEFRA ID stub
 function authenticateUser(userEmail) {
@@ -91,7 +38,7 @@ function authenticateUser(userEmail) {
   console.log(`VU ${__VU}: Starting authentication for ${userEmail}`);
 
   // Step 1: Navigate to login endpoint - this triggers OAuth flow
-  let response = http.get(`${BASE_URL}/auth/login`, {
+  let response = http.get(`${env.baseUrl}/auth/login`, {
     tags: { name: 'Login - Initial' }
   });
 
@@ -112,7 +59,7 @@ function authenticateUser(userEmail) {
   let loginPath = match[1];
   // Handle relative URLs
   if (!loginPath.startsWith('http')) {
-    loginPath = `${DEFRA_ID_STUB_URL}${loginPath.startsWith('/') ? loginPath : '/' + loginPath}`;
+    loginPath = `${env.defraIdStubUrl}${loginPath.startsWith('/') ? loginPath : '/' + loginPath}`;
   }
 
   // Step 3: Click the user's login link
@@ -123,288 +70,12 @@ function authenticateUser(userEmail) {
   console.log(`VU ${__VU}: Following callback redirect...`);
 
   // The final response should be 200 and show authenticated content
-  if (!check(response, { 'authentication successful': (r) => r.status === 200 && r.url === BASE_URL + '/'})) {
+  if (!check(response, { 'authentication successful': (r) => r.status === 200 && r.url === env.baseUrl + '/'})) {
     throw new AuthenticationError(`Authentication failed - final status ${response.status}`);
   }
 
   authDuration.add(Date.now() - authStart);
   console.log(`VU ${__VU}: Authentication successful (${Date.now() - authStart}ms)`);
-
-}
-
-// Step 1: Navigate to home page
-function getHomePage() {
-  let response = http.get(BASE_URL, {});
-
-  if (!check(response, { 'home page loaded': (r) => r.status === 200 && r.url === BASE_URL})) {
-    console.log(`Response status: ${response.status}`);
-    console.log(`Response URL: ${response.url}`);
-    throw new TestingError('Loading the Home Page failed');
-  }
-}
-
-// Step 2: Navigate to dashboard
-function getDashboard() {
-  let response = http.get(`${BASE_URL}/dashboard`, {});
-
-  if (!check(response, { 'dashboard loaded': (r) => r.status === 200 && r.url.endsWith('/dashboard')})) {
-    console.log(`Response status: ${response.status}`);
-    console.log(`Response URL: ${response.url}`);
-    throw new TestingError('Loading the Home Page failed');
-  }
-}
-
-// Step 3: Navigate to origin page
-function getCountryOfOrigin() {
-  console.log('==== Navigating to Country of Origin page...');
-
-  let response = http.get(`${BASE_URL}/import/consignment/origin`, {});
-
-  if (!check(response, { 'Country of Origin loaded': (r) => r.status === 200 && r.url.endsWith('/import/consignment/origin')})) {
-    console.log(`Response status: ${response.status}`);
-    console.log(`Response URL: ${response.url}`);
-    throw new TestingError('Loading the Country of Origin failed');
-  }
-  const newCrumb = extractCrumbFromBody(response.body);
-  if (!newCrumb) {
-    throw new TestingError('Crumb not found in response body.');
-  }
-
-  return newCrumb;
-}
-
-// Step 4: Submit origin
-function submitCountryOfOrigin(crumb, country) {
-  console.log('==== Posting Country of Origin page...');
-  const formData = {
-    'crumb': crumb,
-    'origin-country': country
-  }
-  let response = http.post(`${BASE_URL}/import/consignment/origin`, formData, {});
-
-  if (!check(response, { 'origin submitted': (r) => r.status === 200 && r.url.endsWith('/import/commodity/codes')})) {
-    console.log(`Response status: ${response.status}`);
-    console.log(`Response URL: ${response.url}`);
-    throw new TestingError('Origin submission failed');
-  }
-  const newCrumb = extractCrumbFromBody(response.body);
-  if (!newCrumb) {
-    throw new TestingError('Crumb not found in response body.');
-  }
-
-  return newCrumb;
-}
-
-// Step 5: Search for commodity code
-function submitCommodityCode(crumb, commodityCode) {
-  console.log('==== Selecting Commodity Codes...');
-  let response = http.get(`${BASE_URL}/import/commodity/codes/search?crumb=${encodeURIComponent(crumb)}&commodity-code=${commodityCode}`, {
-  });
-
-  if (!check(response, { 'Commodity Codes Searched': (r) =>
-      r.status === 200 && r.url === `${BASE_URL}/import/commodity/codes/search?crumb=${encodeURIComponent(crumb)}&commodity-code=${commodityCode}`})) {
-    console.log(`Response status: ${response.status}`);
-    console.log(`Response URL: ${response.url}`);
-    throw new TestingError('CommodityCode search failed');
-  }
-  const newCrumb = extractCrumbFromBody(response.body);
-  if (!newCrumb) {
-    throw new TestingError('Crumb not found in response body.');
-  }
-
-  return newCrumb;
-}
-
-// Step 6: Select commodity species
-function submitCommodityCodeSpecies(crumb, commodityType, speciesId) {
-  console.log('==== Selecting Commodity Species...');
-  const response = http.get(`${BASE_URL}/import/commodity/codes/select?crumb=${encodeURIComponent(crumb)}&commodityType=${commodityType}&species=${speciesId}`, {});
-
-  if (!check(response, { 'Commodity Species Selected': (r) =>
-      r.status === 200 && r.url.endsWith('/import/commodity/codes/quantities') })) {
-    console.log(`Response status: ${response.status}`);
-    console.log(`Response URL: ${response.url}`);
-    throw new TestingError('Commodity Species Selection failed');
-  }
-  const newCrumb = extractCrumbFromBody(response.body);
-  if (!newCrumb) {
-    throw new TestingError('Crumb not found in response body.');
-  }
-
-  return newCrumb;
-}
-
-// Step 7: Save commodity quantities
-function submitCommodityQuantities(crumb, commodityCode, speciesId, noOfAnimals, noOfPacks) {
-  console.log('==== Selecting Commodity Quantities...');
-  const response = http.get(`${BASE_URL}/import/commodity/codes/quantities/save?crumb=${encodeURIComponent(crumb)}&${speciesId}-noOfAnimals=${noOfAnimals}&${speciesId}-noOfPacks=${noOfPacks}`, {
-  });
-
-  if (!check(response, { 'Commodity Quantities Saved': (r) =>
-      r.status === 200 && r.url.endsWith('/import/consignment/purpose')})) {
-    console.log(`Response status: ${response.status}`);
-    console.log(`Response URL: ${response.url}`);
-    console.error(`VU ${__VU}: Saving the Commodity Quantities failed`);
-    failedJourneys.add(1);
-    throw new TestingError('Saving the Commodity Quantities failed');
-  }
-  const newCrumb = extractCrumbFromBody(response.body);
-  if (!newCrumb) {
-    throw new TestingError('Crumb not found in response body.');
-  }
-
-  return newCrumb;
-}
-
-// Step 8: Submit purpose
-function submitPurpose(crumb, purpose, internalMarketPurpose) {
-  console.log('==== Posting Purpose page...');
-  const purposeData = {
-    crumb: encodeURIComponent(crumb),
-    purpose: purpose,
-    'internal-market-purpose': internalMarketPurpose
-  }
-  let response = http.post(`${BASE_URL}/import/consignment/purpose`, purposeData, {});
-
-  if (!check(response, { 'Purpose submitted': (r) =>
-      r.status === 200 && r.url.endsWith('/import/transport')})) {
-    console.log(`Response status: ${response.status}`);
-    console.log(`Response URL: ${response.url}`);
-    throw new TestingError('Saving the purpose failed');
-  }
-  const newCrumb = extractCrumbFromBody(response.body);
-  if (!newCrumb) {
-    throw new TestingError('Crumb not found in response body.');
-  }
-
-  return newCrumb;
-}
-
-// Step 9: Submit transport means
-function submitTransport(crumb, bcp, transportMeansBefore, vehicleId) {
-  console.log('==== Posting Means of Transport page...');
-  const transportData = {
-    crumb: encodeURIComponent(crumb),
-    bcp: bcp,
-    'transport-means-before': transportMeansBefore,
-    'vehicle-identifier': vehicleId
-  }
-  let response = http.post(`${BASE_URL}/import/transport`, transportData, {});
-
-  if (!check(response, { 'Commodity Codes Saved': (r) => r.status === 200 && r.url.endsWith('/import/review')})) {
-    console.log(`Response status: ${response.status}`);
-    console.log(`Response URL: ${response.url}`);
-    throw new TestingError('Saving the Means of Transport failed');
-  }
-  const newCrumb = extractCrumbFromBody(response.body);
-  if (!newCrumb) {
-    throw new TestingError('Crumb not found in response body.');
-  }
-  return newCrumb;
-}
-
-// Step 10: Submit notification
-function submitNotification(crumb, confirmation) {
-  console.log('==== Submitting Notification...');
-  const submitData = {
-    crumb: encodeURIComponent(crumb),
-    confirmAccurate: confirmation
-  }
-  let response = http.post(`${BASE_URL}/import/review`, submitData, {});
-
-  if (!check(response, { 'Notification Submitted': (r) => r.status === 200 && r.url.endsWith('/import/confirmation')})) {
-    console.log(`Response status: ${response.status}`);
-    console.log(`Response URL: ${response.url}`);
-    throw new TestingError('Submitting the Notification failed');
-  }
-
-  if (!check(response, {
-    'confirmation received': (r) => r.status === 200 && (r.body.includes('Import notification submitted'))
-  })) {
-    throw new TestingError('Confirmation page content not found.');
-  }
-}
-
-function changeCommodityCodes(crumb) {
-  console.log('==== Changing Commodity Quantities...');
-  const response = http.get(`${BASE_URL}/import/commodity/codes?crumb=${encodeURIComponent(crumb)}`, {});
-  if (!check(response, { 'Commodity Codes Changed': (r) => r.status === 200 && r.url.endsWith('/import/commodity/codes/quantities')})) {
-    console.log(`Response status: ${response.status}`);
-    console.log(`Response URL: ${response.url}`);
-    throw new TestingError('Changing the Commodity Codes failed');
-  }
-  const newCrumb = extractCrumbFromBody(response.body);
-  if (!newCrumb) {
-    throw new TestingError('Crumb not found in response body.');
-  }
-
-  return newCrumb;
-}
-
-// Validate review page content
-function validateReviewPage(expectedCountry, expectedCommodity, expectedReason, expectedPurpose, bcp) {
-  console.log('==== Validating Review page...');
-
-  const response = http.get(`${BASE_URL}/import/review`, {});
-
-  if (!check(response, { 'Review page loaded': (r) => r.status === 200 && r.url.endsWith('/import/review')})) {
-    console.log(`Response status: ${response.status}`);
-    console.log(`Response URL: ${response.url}`);
-    throw new TestingError('Loading the Review page failed');
-  }
-
-  const body = response.body;
-  const validations = [];
-
-  // Validate Country of Origin
-  if (body.includes(expectedCountry)) {
-    console.log(`✓ Country of Origin validated: ${expectedCountry}`);
-  } else {
-    validations.push(`Country of Origin: expected ${expectedCountry} not found`);
-  }
-
-  // Validate Commodity
-  if (body.includes(expectedCommodity)) {
-    console.log(`✓ Commodity validated: ${expectedCommodity}`);
-  } else {
-    validations.push(`Commodity: expected '${expectedCommodity}' not found`);
-  }
-
-  // Validate Main reason for import
-  if (body.includes(expectedReason)) {
-    console.log(`✓ Main reason for import validated: ${expectedReason}`);
-  } else {
-    validations.push(`Main reason for import: expected ${expectedReason} not found`);
-  }
-
-  // Validate Internal market purpose
-  if (body.includes(expectedPurpose)) {
-    console.log(`✓ Internal market purpose validated: ${expectedPurpose}`);
-  } else {
-    validations.push(`Internal market purpose: expected ${expectedPurpose} not found`);
-  }
-
-  // Validate Transport BCP or PoE (vehicle identifier)
-  if (body.includes(bcp)) {
-    console.log(`✓ BCP validated: ${bcp}`);
-  } else {
-    validations.push(`BCP: expected ${bcp} not found`);
-  }
-
-  // If any validations failed, throw error
-  if (validations.length > 0) {
-    console.error('Review page validation failed:');
-    validations.forEach(v => console.error(`  ✗ ${v}`));
-    throw new TestingError(`Review page validation failed: ${validations.join('; ')}`);
-  }
-
-  console.log('✓ All review page validations passed');
-}
-
-
-//Helper function: get a random String
-function getRandomString() {
-  return Math.random().toString(36).substring(2, 12).toUpperCase();
 }
 
 ////////////////////////////////////////////////////////////
@@ -414,58 +85,83 @@ function getRandomString() {
 export default function () {
   const journeyStart = Date.now();
 
+  // Initialize page objects
+  const homePage = new HomePage(env.baseUrl);
+  const dashboardPage = new DashboardPage(env.baseUrl);
+  const originPage = new OriginPage(env.baseUrl);
+  const commodityPage = new CommodityPage(env.baseUrl);
+  const purposePage = new PurposePage(env.baseUrl);
+  const transportPage = new TransportPage(env.baseUrl);
+  const reviewPage = new ReviewPage(env.baseUrl);
+
+  // Generate randomized test data for this journey
+  const testData = generateImportNotificationData({ useWeightedCountries: true });
+
   // Determine user email for this VU
-  const userEmail = `${USER_POOL_PREFIX}-${__VU}@${USER_POOL_DOMAIN}`;
+  const userEmail = getUserEmail(__VU);
   console.log(`\n=== VU ${__VU}: Starting journey for ${userEmail} ===`);
+  console.log(`Test Data: ${testData.countryCode} -> ${testData.commodity.description}`);
 
   try {
     authenticateUser(userEmail);
 
-    getHomePage();
+    homePage.visit();
+    dashboardPage.visit();
 
-    getDashboard();
-
+    // Step 1: Country of Origin
     const originStart = Date.now();
-    let crumb = getCountryOfOrigin()
-    const countryCode = countryCodes[Math.floor(Math.random() * countryCodes.length)]
-    crumb = submitCountryOfOrigin(crumb, countryCode);
+    let crumb = originPage.visit();
+    crumb = originPage.submit(crumb, testData.countryCode);
     originStepDuration.add(Date.now() - originStart);
 
+    // Step 2: Commodity Selection
     const commodityStart = Date.now();
-    const commodityCode = '0102';
-    crumb = submitCommodityCode(crumb, commodityCode);
-    const speciesId = '716661';
-    crumb = submitCommodityCodeSpecies(crumb, "Domestic", speciesId);
-
-    const noOfAnimals = Math.floor(Math.random() * 500) + 1;
-    const noOfPacks = Math.floor(Math.random() * 50) + 1;
-    crumb = submitCommodityQuantities(crumb, commodityCode, speciesId, noOfAnimals, noOfPacks);
+    crumb = commodityPage.searchCode(crumb, testData.commodity.code);
+    crumb = commodityPage.selectSpecies(crumb, testData.commodity.speciesType, testData.commodity.speciesId);
+    crumb = commodityPage.saveQuantities(crumb, testData.commodity.speciesId, testData.commodity.animals, testData.commodity.packs);
     commodityStepDuration.add(Date.now() - commodityStart);
 
-    let purpose = internalMarketPurposes[Math.floor(Math.random() * internalMarketPurposes.length)]
-    crumb = submitPurpose(crumb, 'internalmarket', purpose);
+    // Step 3: Purpose
+    crumb = purposePage.submit(crumb, testData.purpose, testData.internalMarketPurpose);
 
-    let vehicleId = getRandomString();
-    crumb = submitTransport(crumb, 'Dover', 'Road', vehicleId);
+    // Step 4: Transport
+    crumb = transportPage.submit(crumb, testData.transport.bcp, testData.transport.type, testData.transport.vehicleId);
 
-    // validate review page
-    validateReviewPage(countryCode, '0102 - Live bovine animals', 'internalmarket', purpose, 'Dover');
+    // Step 5: Review and validate
+    reviewPage.validate(
+      testData.countryCode,
+      testData.commodity.description,
+      testData.purpose,
+      testData.internalMarketPurpose,
+      testData.transport.bcp
+    );
 
-    // Hit the Change link for the commodity
-    crumb = changeCommodityCodes(crumb);
-    crumb = submitCommodityQuantities(crumb, commodityCode, speciesId, 1, 12);
-    purpose = internalMarketPurposes[Math.floor(Math.random() * internalMarketPurposes.length)]
-    crumb = submitPurpose(crumb, 'internalmarket', purpose);
-    vehicleId = getRandomString();
-    crumb = submitTransport(crumb, 'Dover', 'Road', vehicleId);
+    // Step 6: Change commodity quantities (testing the change flow)
+    // Generate new quantities for the change scenario
+    const newAnimals = Math.floor(testData.commodity.animals * 0.5); // Reduce by 50%
+    const newPacks = Math.floor(testData.commodity.packs * 0.5);
 
-    // validate review page
-    validateReviewPage(countryCode, '0102 - Live bovine animals', 'internalmarket', purpose, 'Dover');
+    crumb = commodityPage.change(crumb);
+    crumb = commodityPage.saveQuantities(crumb, testData.commodity.speciesId, newAnimals, newPacks);
 
-    // submit notification
+    // Re-submit purpose and transport (generate new random data)
+    const testData2 = generateImportNotificationData({ useWeightedCountries: true });
+    crumb = purposePage.submit(crumb, testData.purpose, testData2.internalMarketPurpose);
+    crumb = transportPage.submit(crumb, testData2.transport.bcp, testData2.transport.type, testData2.transport.vehicleId);
+
+    // Step 7: Final validation and submit
+    reviewPage.validate(
+      testData.countryCode,
+      testData.commodity.description,
+      testData.purpose,
+      testData2.internalMarketPurpose,
+      testData2.transport.bcp
+    );
+
     const submitStart = Date.now();
-    submitNotification(crumb, true);
+    reviewPage.submit(crumb, true);
     submitDuration.add(Date.now() - submitStart);
+
   } catch (e) {
     if (e instanceof TestingError) {
       console.log('name:', e.name);
@@ -485,7 +181,6 @@ export default function () {
   journeyDuration.add(journeyTime);
 
   console.log(`VU ${__VU}: Journey completed successfully in ${journeyTime}ms`);
-
 }
 
 // Custom HTML report generator
