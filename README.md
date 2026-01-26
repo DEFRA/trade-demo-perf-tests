@@ -24,6 +24,7 @@ Tests require authenticated users from the DEFRA ID stub. User pools are created
 ## Table of Contents
 
 - [Architecture](#architecture)
+- [Key Features](#key-features)
 - [Project Structure](#project-structure)
 - [Test Journey](#test-journey)
 - [Quick Start](#quick-start)
@@ -31,27 +32,61 @@ Tests require authenticated users from the DEFRA ID stub. User pools are created
 - [Test Output](#test-output)
 - [Available npm Scripts](#available-npm-scripts)
 - [Advanced Configuration](#advanced-configuration)
+- [CDP Deployment](#cdp-deployment)
 - [How Authentication Works](#how-authentication-works)
+- [Documentation](#documentation)
 - [Troubleshooting](#troubleshooting)
 - [Build](#build)
 - [Run](#run)
 - [Local Testing with Docker Compose](#local-testing-with-docker-compose)
 - [Licence](#licence)
 
+## Key Features
+
+✅ **Profile-Based Testing** - Predefined workload (smoke, load, stress, spike) and threshold (low, medium, high) profiles for easy configuration
+✅ **Randomized Test Data** - Each virtual user submits different data with weighted distributions for realistic load patterns
+✅ **Page Object Pattern** - Clean, maintainable code with 49% reduction in test file size (607 → 311 lines)
+✅ **CDP-Ready** - Docker-based deployment with automatic user pool sizing based on workload profiles
+✅ **Live Authentication** - Real DEFRA ID OAuth flow for each virtual user during test execution
+✅ **Comprehensive Documentation** - Detailed guides for local development, remote execution, and customization
+
 ## Project Structure
 
 ```
 trade-demo-perf-tests/
 ├── src/
+│   ├── config/
+│   │   ├── test-config.js                  # Centralized test configuration with profile support
+│   │   ├── workloads.js                    # Workload profiles (smoke, load, stress, spike)
+│   │   └── thresholds.js                   # Threshold profiles (low, medium, high)
+│   ├── data/
+│   │   └── test-data.js                    # Test data with randomization (countries, commodities, BCPs)
 │   ├── lib/
 │   │   └── defra-id-stub-client.js         # DEFRA ID stub API client
+│   ├── pages/
+│   │   ├── home-page.js                    # Home page interactions
+│   │   ├── dashboard-page.js               # Dashboard navigation
+│   │   ├── origin-page.js                  # Country of origin selection
+│   │   ├── commodity-page.js               # Commodity search, species, quantities
+│   │   ├── purpose-page.js                 # Import purpose selection
+│   │   ├── transport-page.js               # Transport details (BCP, vehicle)
+│   │   └── review-page.js                  # Review validation and submission
 │   ├── setup/
 │   │   ├── create-user-pool.js             # Creates user pool before tests
 │   │   └── cleanup-user-pool.js            # Expires users after tests
-│   └── tests/
-│       ├── trade-import-notification.js    # Main k6 performance test
-│       └── notification-journey.js         # Legacy test (deprecated)
-├── entrypoint.sh                           # Orchestrates setup → test → teardown
+│   ├── tests/
+│   │   ├── trade-import-notification.js    # Main k6 performance test (refactored)
+│   │   └── notification-journey.js         # Legacy test (deprecated)
+│   └── utils/
+│       └── http-utils.js                   # HTTP utilities (crumb extraction, validation)
+├── scripts/
+│   └── run-k6.js                           # Wrapper script for local testing with env vars
+├── docs/
+│   ├── profile-based-testing.md            # Comprehensive profile guide
+│   ├── remote-execution-guide.md           # CDP deployment configuration
+│   ├── test-data-usage.md                  # Test data module documentation
+│   └── *.md                                # Additional refactoring documentation
+├── entrypoint.sh                           # CDP orchestration: setup → test → teardown
 ├── package.json
 ├── users-pool.json                         # Generated: user pool data with userIds
 ├── index.html                              # Generated: HTML test report
@@ -61,21 +96,25 @@ trade-demo-perf-tests/
 
 ## Test Journey
 
-The k6 test (`trade-import-notification.js`) executes the complete import notification journey:
+The k6 test (`trade-import-notification.js`) executes the complete import notification journey with **randomized test data** for realistic load patterns:
 
 1. **Authentication**: Login via DEFRA ID stub (scrapes HTML to find user-specific login link)
 2. **Home Page**: Verify authenticated landing page
 3. **Dashboard**: Navigate to user dashboard
-4. **Origin**: Select random country of origin from EU/international list
-5. **Commodity Search**: Search for commodity code (0102 - Live bovine animals)
-6. **Commodity Selection**: Select species (Bison bison)
-7. **Quantities**: Enter random number of animals and packs
-8. **Purpose**: Select random internal market purpose (e.g., Slaughter, Commercial Sale)
-9. **Transport**: Enter BCP (Dover) and random vehicle identifier
+4. **Origin**: Select **random country** from weighted distribution (FR, DE, NL, IE are most common)
+5. **Commodity Search**: Search for **random commodity code** (horses, bovine, swine, sheep, goats, poultry)
+6. **Commodity Selection**: Select **random species** based on commodity type
+7. **Quantities**: Enter **random quantities** within realistic ranges for each commodity
+8. **Purpose**: Select **random internal market purpose** (Commercial Sale, Slaughter, Breeding, etc.)
+9. **Transport**: Enter **random BCP** (Dover, Portsmouth, Heathrow, etc.) with **type-specific vehicle ID**
 10. **Review Validation**: Validate all entered data appears correctly on review page
-11. **Change Journey**: Modify commodity quantities and resubmit through the flow
-12. **Second Review Validation**: Re-validate review page with updated data
-13. **Submit**: Submit notification and verify confirmation
+11. **Submit**: Submit notification and verify confirmation
+
+**Key Features**:
+- **Randomized data**: Each virtual user submits different data (countries, commodities, quantities, BCPs)
+- **Weighted distributions**: Countries appear based on realistic frequency (e.g., FR/DE/NL more common)
+- **Type-specific identifiers**: Road vehicles use UK-style registrations (GB12ABC), airplanes use flight numbers (BA1234)
+- **Page Object Pattern**: Clean, reusable code with 49% reduction in test file size
 
 ## Quick Start
 
@@ -105,7 +144,22 @@ npm install
 
 ### Run Performance Test
 
-Full workflow (recommended):
+**Profile-based testing** (recommended):
+```bash
+# Smoke test (1 VU, 1 iteration, quick validation)
+K6_WORKLOAD=smoke K6_THRESHOLD=low npm run test:new
+
+# Load test (12 iterations over 15 minutes, average load)
+K6_WORKLOAD=load K6_THRESHOLD=medium npm run test:new
+
+# Stress test (2160 iterations over 15 minutes, 180x average load)
+K6_WORKLOAD=stress K6_THRESHOLD=high npm run test:new
+
+# Spike test (ramp 0→50→0 VUs in 1.5 minutes)
+K6_WORKLOAD=spike K6_THRESHOLD=high npm run test:new
+```
+
+**Manual configuration** (for custom scenarios):
 ```bash
 VUS_MAX=5 \
 RAMP_UP_DURATION=10s \
@@ -114,16 +168,38 @@ RAMP_DOWN_DURATION=5s \
 npm run test:new
 ```
 
-Or run steps individually:
+**Run steps individually**:
 ```bash
 VUS_MAX=5 npm run setup:users     # Create user pool
-VUS_MAX=5 npm run k6:new          # Run k6 test
+K6_WORKLOAD=load npm run k6:new   # Run k6 test
 npm run cleanup:users              # Expire users
 ```
 
 ## Environment Variables
 
-### Test Configuration
+### Profile Configuration (Recommended)
+
+| Variable | Default | Options | Description |
+|----------|---------|---------|-------------|
+| `K6_WORKLOAD` | `smoke` | `smoke`, `load`, `stress`, `spike` | Workload profile (defines executor, VUs, duration) |
+| `K6_THRESHOLD` | `low` | `low`, `medium`, `high` | Threshold profile (defines performance SLAs) |
+
+**Workload Profiles**:
+- `smoke`: 1 VU, 1 iteration - Quick validation
+- `load`: 12 iterations over 15 min - Average expected load
+- `stress`: 2160 iterations over 15 min - High load (180x average)
+- `spike`: 0→50→0 VUs in 1.5 min - Sudden traffic increase
+
+**Threshold Profiles**:
+- `low`: P90<2500ms, 1% errors - Development/testing
+- `medium`: P90<400ms, P95<800ms, P99.9<2000ms - Pre-production
+- `high`: P90<250ms, P95<500ms, P99.9<1500ms - Production
+
+See [docs/profile-based-testing.md](docs/profile-based-testing.md) for full profile documentation.
+
+### Manual Configuration (Advanced)
+
+For custom scenarios not covered by profiles:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -132,14 +208,11 @@ npm run cleanup:users              # Expire users
 | `RAMP_UP_DURATION` | `5m` | Time to ramp up to max VUs |
 | `HOLD_DURATION` | `10m` | Time to hold at max VUs |
 | `RAMP_DOWN_DURATION` | `2m` | Time to ramp down to zero |
-
-### Thresholds
-
-| Variable | Default | Description |
-|----------|---------|-------------|
 | `THRESHOLD_P95_MS` | `3000` | 95th percentile response time (ms) |
 | `THRESHOLD_P99_MS` | `5000` | 99th percentile response time (ms) |
 | `THRESHOLD_ERROR_RATE` | `0.01` | Maximum error rate (1%) |
+
+**Priority**: Manual env vars > Profile vars > Defaults
 
 ### User Pool Configuration
 
@@ -311,8 +384,28 @@ xdg-open index.html  # Linux
 
 ## Advanced Configuration
 
-### Custom User Pool
+### Profile-Based Examples
 
+**Use load profile with custom thresholds**:
+```bash
+K6_WORKLOAD=load \
+THRESHOLD_P95_MS=1000 \
+THRESHOLD_P99_MS=2000 \
+npm run test:new
+```
+
+**Use high thresholds with custom duration**:
+```bash
+K6_THRESHOLD=high \
+VUS_MAX=25 \
+RAMP_UP_DURATION=2m \
+HOLD_DURATION=8m \
+npm run test:new
+```
+
+### Manual Configuration Examples
+
+**Custom user pool**:
 ```bash
 VUS_MAX=10 \
 USER_POOL_PREFIX=perf-test-user \
@@ -321,8 +414,7 @@ DEFRA_ID_STUB_URL=http://localhost:3200 \
 npm run setup:users
 ```
 
-### Custom Load Profile
-
+**Custom load profile**:
 ```bash
 VUS_MAX=100 \
 RAMP_UP_DURATION=5m \
@@ -332,14 +424,52 @@ TARGET_URL=http://localhost:3000 \
 npm run k6:new
 ```
 
-### Custom Thresholds
-
+**Custom thresholds**:
 ```bash
 THRESHOLD_P95_MS=2000 \
 THRESHOLD_P99_MS=4000 \
 THRESHOLD_ERROR_RATE=0.005 \
 npm run k6:new
 ```
+
+## CDP Deployment
+
+### Configuration via CDP App Config
+
+Tests run on CDP using profile-based configuration. In your `cdp-app-config` repository:
+
+**Development** (`services/trade-demo-perf-tests/dev/trade-demo-perf-tests.env`):
+```bash
+K6_WORKLOAD=load
+K6_THRESHOLD=low
+USER_POOL_PREFIX=perf-test-user
+USER_POOL_DOMAIN=dev.performance.test
+```
+
+**Test** (`services/trade-demo-perf-tests/test/trade-demo-perf-tests.env`):
+```bash
+K6_WORKLOAD=load
+K6_THRESHOLD=medium
+USER_POOL_PREFIX=perf-test-user
+USER_POOL_DOMAIN=test.performance.test
+```
+
+**Perf-Test** (`services/trade-demo-perf-tests/perf-test/trade-demo-perf-tests.env`):
+```bash
+K6_WORKLOAD=stress
+K6_THRESHOLD=high
+USER_POOL_PREFIX=perf-test-user
+USER_POOL_DOMAIN=perftest.performance.test
+```
+
+The `entrypoint.sh` script automatically:
+1. Calculates required VUs from the workload profile
+2. Creates the user pool with correct size
+3. Runs K6 with profile configuration
+4. Cleans up users after test completion
+5. Publishes results to S3 (if configured)
+
+See [docs/remote-execution-guide.md](docs/remote-execution-guide.md) for complete CDP deployment guide.
 
 ## How Authentication Works
 

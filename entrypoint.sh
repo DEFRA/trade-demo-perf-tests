@@ -8,12 +8,39 @@ K6_SUMMARY=summary.json
 
 export HTTPS_PROXY=http://localhost:3128
 
-# Validate VUS_MAX matches pool size
-VUS_MAX=${VUS_MAX:-50}
-echo "Configured for ${VUS_MAX} virtual users"
+# Profile-based configuration for CDP deployments
+K6_WORKLOAD=${K6_WORKLOAD:-smoke}
+K6_THRESHOLD=${K6_THRESHOLD:-low}
+echo "Test Profile: workload=${K6_WORKLOAD}, threshold=${K6_THRESHOLD}"
+
+# Set VUS_MAX for user pool creation based on workload profile
+# These match the preAllocatedVUs or max target from workloads.js
+case $K6_WORKLOAD in
+  smoke)
+    VUS_MAX=${VUS_MAX:-1}
+    ;;
+  load)
+    VUS_MAX=${VUS_MAX:-1}
+    ;;
+  stress)
+    VUS_MAX=${VUS_MAX:-300}
+    ;;
+  spike)
+    VUS_MAX=${VUS_MAX:-50}
+    ;;
+  *)
+    echo "WARNING: Unknown workload profile '${K6_WORKLOAD}', defaulting to VUS_MAX=50"
+    VUS_MAX=${VUS_MAX:-50}
+    ;;
+esac
+
+echo "Creating user pool with ${VUS_MAX} virtual users"
 
 # Setup: Create user pool
 echo "=== Setup: Creating user pool ==="
+export VUS_MAX
+export USER_POOL_PREFIX=${USER_POOL_PREFIX:-k6-perf-user}
+export USER_POOL_DOMAIN=${USER_POOL_DOMAIN:-${ENVIRONMENT}.performance.test}
 node ${K6_HOME}/src/setup/create-user-pool.js
 setup_exit_code=$?
 
@@ -22,19 +49,16 @@ if [ $setup_exit_code -ne 0 ]; then
   exit $setup_exit_code
 fi
 
-# Run k6 test
+# Run k6 test with profile-based configuration
 echo "=== Running k6 performance test ==="
 k6 run \
+  -e K6_WORKLOAD=${K6_WORKLOAD} \
+  -e K6_THRESHOLD=${K6_THRESHOLD} \
   -e TARGET_URL=${TARGET_URL:-https://trade-demo-frontend.${ENVIRONMENT}.cdp-int.defra.cloud} \
-  -e VUS_MAX=${VUS_MAX} \
-  -e RAMP_UP_DURATION=${RAMP_UP_DURATION:-5m} \
-  -e HOLD_DURATION=${HOLD_DURATION:-10m} \
-  -e RAMP_DOWN_DURATION=${RAMP_DOWN_DURATION:-2m} \
-  -e THRESHOLD_P95_MS=${THRESHOLD_P95_MS:-3000} \
-  -e THRESHOLD_P99_MS=${THRESHOLD_P99_MS:-5000} \
-  -e THRESHOLD_ERROR_RATE=${THRESHOLD_ERROR_RATE:-0.01} \
-  -e DEFRA_ID_STUB_URL=${DEFRA_ID_STUB_URL:-http://defra-id-stub:3200} \
-  ${K6_HOME}/src/tests/notification-journey.js \
+  -e DEFRA_ID_STUB_URL=${DEFRA_ID_STUB_URL:-https://cdp-defra-id-stub.${ENVIRONMENT}.cdp-int.defra.cloud} \
+  -e USER_POOL_PREFIX=${USER_POOL_PREFIX} \
+  -e USER_POOL_DOMAIN=${USER_POOL_DOMAIN} \
+  ${K6_HOME}/src/tests/trade-import-notification.js \
   --summary-export=${K6_SUMMARY}
 test_exit_code=$?
 
