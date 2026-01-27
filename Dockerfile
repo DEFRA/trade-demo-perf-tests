@@ -17,7 +17,7 @@ WORKDIR /opt/perftest
 
 COPY package.json ./
 COPY src/ ./src/
-COPY scripts/ ./scripts/
+#COPY scripts/ ./scripts/
 COPY entrypoint.sh .
 
 ENV S3_ENDPOINT=https://s3.eu-west-2.amazonaws.com
