@@ -9,7 +9,7 @@ K6_SUMMARY=summary.json
 export HTTPS_PROXY=http://localhost:3128
 
 # Profile-based configuration for CDP deployments
-K6_WORKLOAD=${K6_WORKLOAD:-smoke}
+K6_WORKLOAD=${PROFILE:-smoke}
 K6_THRESHOLD=${K6_THRESHOLD:-low}
 echo "Test Profile: workload=${K6_WORKLOAD}, threshold=${K6_THRESHOLD}"
 
@@ -41,6 +41,7 @@ echo "=== Setup: Creating user pool ==="
 export VUS_MAX
 export USER_POOL_PREFIX=${USER_POOL_PREFIX:-k6-perf-user}
 export USER_POOL_DOMAIN=${USER_POOL_DOMAIN:-${ENVIRONMENT}.performance.test}
+export DEFRA_ID_STUB_URL=${DEFRA_ID_STUB_URL:-https://cdp-defra-id-stub.${ENVIRONMENT}.cdp-int.defra.cloud}
 node ${K6_HOME}/src/setup/create-user-pool.js
 setup_exit_code=$?
 
