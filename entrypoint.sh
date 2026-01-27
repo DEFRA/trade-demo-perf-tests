@@ -29,8 +29,8 @@ case $K6_WORKLOAD in
     VUS_MAX=${VUS_MAX:-50}
     ;;
   *)
-    echo "WARNING: Unknown workload profile '${K6_WORKLOAD}', defaulting to VUS_MAX=50"
-    VUS_MAX=${VUS_MAX:-50}
+    echo "WARNING: Unknown workload profile '${K6_WORKLOAD}', defaulting to VUS_MAX=1"
+    VUS_MAX=${VUS_MAX:-1}
     ;;
 esac
 
