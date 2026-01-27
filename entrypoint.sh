@@ -38,7 +38,7 @@ echo "Creating user pool with ${VUS_MAX} virtual users"
 
 # Setup: Create user pool
 echo "=== Setup: Creating user pool ==="
-export VUS_MAX
+export VUS_MAX=$VUS_MAX
 export USER_POOL_PREFIX=${USER_POOL_PREFIX:-k6-perf-user}
 export USER_POOL_DOMAIN=${USER_POOL_DOMAIN:-${ENVIRONMENT}.performance.test}
 export DEFRA_ID_STUB_URL=${DEFRA_ID_STUB_URL:-https://cdp-defra-id-stub.${ENVIRONMENT}.cdp-int.defra.cloud}
