@@ -4,6 +4,7 @@ import { DefraIdStubClient } from '../lib/defra-id-stub-client.js';
 import fs from 'fs';
 import crypto from 'crypto';
 
+console.log('No of Users: ', process.env.VUS_MAX);
 const VUS_MAX = parseInt(process.env.VUS_MAX || '50', 10);
 const USER_POOL_PREFIX = process.env.USER_POOL_PREFIX || 'k6-perf-user';
 const USER_POOL_DOMAIN = process.env.USER_POOL_DOMAIN || 'example.com';
