@@ -8,7 +8,6 @@
     "cleanup:users": "node src/setup/cleanup-user-pool.js",
     "k6:local": "k6 run src/tests/notification-journey.js",
     "k6:new": "node scripts/run-k6.js src/tests/trade-import-notification.js",
-    "test:full": "npm run setup:users && npm run capture:sessions && npm run k6:local; EXIT_CODE=$?; npm run cleanup:users; exit $EXIT_CODE",
     "test:new": "npm run setup:users && npm run k6:new; EXIT_CODE=$?; npm run cleanup:users; exit $EXIT_CODE"
   },
   "keywords": [

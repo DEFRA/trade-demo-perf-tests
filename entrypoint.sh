@@ -23,10 +23,10 @@ case $K6_WORKLOAD in
     VUS_MAX=${VUS_MAX:-1}
     ;;
   stress)
-    VUS_MAX=${VUS_MAX:-300}
+    VUS_MAX=${VUS_MAX:-50}
     ;;
   spike)
-    VUS_MAX=${VUS_MAX:-50}
+    VUS_MAX=${VUS_MAX:-300}
     ;;
   *)
     echo "WARNING: Unknown workload profile '${K6_WORKLOAD}', defaulting to VUS_MAX=1"

@@ -2,13 +2,14 @@
 
 import http from 'k6/http';
 import { check } from 'k6';
-import { postWithValidation } from '../utils/http-utils.js';
+import {extractCrumbOrThrow, postWithValidation, postRestWithValidation, extractCSRFTokenFromMeta} from '../utils/http-utils.js';
 import { TestingError } from '../tests/exceptions.js';
 
 export class ReviewPage {
   constructor(baseUrl) {
     this.baseUrl = baseUrl;
     this.url = `${baseUrl}/import/review`;
+    this.csrfToken = null; // Store the meta tag token.
   }
 
   /**
@@ -31,6 +32,12 @@ export class ReviewPage {
       console.log(`Response status: ${response.status}`);
       console.log(`Response URL: ${response.url}`);
       throw new TestingError('Loading the Review page failed');
+    }
+
+    // Extract and store CSRF token from meta tag for RESTful calls
+    this.csrfToken = extractCSRFTokenFromMeta(response.body);
+    if (!this.csrfToken) {
+      throw new TestingError('CSRF token meta tag not found in review page');
     }
 
     const body = response.body;
@@ -91,7 +98,7 @@ export class ReviewPage {
     console.log('==== Submitting Notification...');
 
     const submitData = {
-      crumb: encodeURIComponent(crumb),
+      crumb: crumb,
       confirmAccurate: confirmation
     };
 
@@ -111,5 +118,40 @@ export class ReviewPage {
     })) {
       throw new TestingError('Confirmation page content not found.');
     }
+  }
+
+  /**
+   * Save as draft
+   */
+  saveAsDraft() {
+    console.log('==== Saving Notification...');
+
+    const saveData = JSON.stringify({
+      formData: {}
+    });
+
+    const params = {
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-Token': this.csrfToken  // CSRF token in header, not body!
+      }
+    }
+
+    const jsonResponse = postRestWithValidation(
+      `${this.baseUrl}/import/save-as-draft`,
+      saveData,
+      {
+        'Notification Saved': (r) => r.status === 200
+      },
+      'Saving the Draft Notification failed',
+      params
+    );
+
+    if (!check(jsonResponse, {
+      'Draft saved successfully': (j) => j.success && j.message === 'Draft saved successfully'
+    })) {
+      throw new TestingError('Draft not saved successully');
+    }
+    console.log(`✓ Draft saved successfully. ID: ${jsonResponse.notificationId || 'new'}`);
   }
 }

@@ -21,7 +21,7 @@ export class TransportPage {
     console.log('==== Posting Means of Transport page...');
 
     const transportData = {
-      crumb: encodeURIComponent(crumb),
+      crumb: crumb,
       bcp: bcp,
       'transport-means-before': transportMeansBefore,
       'vehicle-identifier': vehicleIdentifier
