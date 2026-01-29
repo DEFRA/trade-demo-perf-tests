@@ -3,7 +3,7 @@
 import { DefraIdStubClient } from '../lib/defra-id-stub-client.js';
 import fs from 'fs';
 
-const DEFRA_ID_STUB_URL = process.env.DEFRA_ID_STUB_URL || 'http://localhost:3200';
+const DEFRA_ID_STUB_URL = process.env.DEFRA_ID_STUB_URL || 'http://localhost:3200/cdp-defra-id-stub';
 
 async function cleanupUserPool() {
   console.log(`Cleaning up user pool...`);

@@ -220,7 +220,7 @@ For custom scenarios not covered by profiles:
 |----------|---------|-------------|
 | `USER_POOL_PREFIX` | `k6-perf-user` | Email prefix for test users |
 | `USER_POOL_DOMAIN` | `example.com` | Email domain for test users |
-| `DEFRA_ID_STUB_URL` | `http://localhost:3200` | DEFRA ID stub URL |
+| `DEFRA_ID_STUB_URL` | `http://localhost:3200/cdp-defra-id-stub` | DEFRA ID stub URL |
 
 ### AWS/S3 Configuration
 
@@ -313,7 +313,7 @@ Once the stack is running:
 * **Frontend**: http://localhost:3000 (includes DEFRA ID authentication)
 * **Backend API**: http://localhost:8085/health
 * **Commodity Codes API**: http://localhost:8086/health
-* **DEFRA ID Stub**: http://localhost:3200
+* **DEFRA ID Stub**: http://localhost:3200/cdp-defra-id-stub
 
 ---
 
@@ -410,7 +410,7 @@ npm run test:new
 VUS_MAX=10 \
 USER_POOL_PREFIX=perf-test-user \
 USER_POOL_DOMAIN=testing.com \
-DEFRA_ID_STUB_URL=http://localhost:3200 \
+DEFRA_ID_STUB_URL=http://localhost:3200/cdp-defra-id-stub \
 npm run setup:users
 ```
 
