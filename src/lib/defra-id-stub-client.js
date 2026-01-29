@@ -36,6 +36,7 @@ export class DefraIdStubClient {
       ]
     };
 
+    console.log(`Registering user: ${userData.email} to ${this.registerEndpoint}...`);
     return this._fetchWithRetry(this.registerEndpoint, {
       method: 'POST',
       headers: {

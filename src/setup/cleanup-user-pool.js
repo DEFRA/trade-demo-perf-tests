@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 
 import { DefraIdStubClient } from '../lib/defra-id-stub-client.js';
-import { open } from 'k6';
-import exec from 'k6/x/exec';
+import fs from 'fs';
 
 const DEFRA_ID_STUB_URL = process.env.DEFRA_ID_STUB_URL || 'http://localhost:3200';
 
@@ -19,8 +18,9 @@ async function cleanupUserPool() {
   // Try to read users from users-pool.json first
   const filePath = 'users-pool.json';
   try {
-    // Attempt to open the file
-    const poolData = JSON.parse(open(filePath));
+    // Attempt to read the file
+    const fileContent = fs.readFileSync(filePath, 'utf-8');
+    const poolData = JSON.parse(fileContent);
     usersToClean = poolData.users || [];
     console.log(`Found ${usersToClean.length} users in users-pool.json`);
   } catch (error) {
@@ -64,8 +64,9 @@ async function cleanupUserPool() {
 
   // Remove users-pool.json if it exists
   try {
-    if (open(filePath)) {
-      exec.command("rm", [filePath]);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      console.log(`Removed ${filePath}`);
     }
   } catch (error) {
     console.warn(`Could not remove users-pool.json: ${error.message}`);
