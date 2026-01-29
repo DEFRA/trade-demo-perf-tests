@@ -8,7 +8,7 @@ console.log('No of Users: ', process.env.VUS_MAX);
 const VUS_MAX = parseInt(process.env.VUS_MAX || '50', 10);
 const USER_POOL_PREFIX = process.env.USER_POOL_PREFIX || 'k6-perf-user';
 const USER_POOL_DOMAIN = process.env.USER_POOL_DOMAIN || 'example.com';
-const DEFRA_ID_STUB_URL = process.env.DEFRA_ID_STUB_URL || 'http://localhost:3200';
+const DEFRA_ID_STUB_URL = process.env.DEFRA_ID_STUB_URL || 'http://localhost:3200/cdp-defra-id-stub';
 const FAILURE_TOLERANCE = 0.1; // Allow up to 10% failure rate
 
 // Validate VUS_MAX
