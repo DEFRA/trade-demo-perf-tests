@@ -20,7 +20,7 @@ export class PurposePage {
     console.log('==== Posting Purpose page...');
 
     const purposeData = {
-      crumb: encodeURIComponent(crumb),
+      crumb: crumb,
       purpose: purpose,
       'internal-market-purpose': internalMarketPurpose
     };

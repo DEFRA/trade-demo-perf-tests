@@ -91,13 +91,15 @@ export class DefraIdStubClient {
 
       if (!response.ok) {
         // Enhance error message with response body
-        let errorBody = '';
-        try {
-          errorBody = await response.text();
-        } catch (e) {
-          // Ignore if unable to read body
-        }
-        const errorMessage = `HTTP ${response.status}: ${response.statusText}${errorBody ? ` - ${errorBody}` : ''}`;
+        // let errorBody = '';
+        // try {
+        //   errorBody = await response.text();
+        // } catch (e) {
+        //   // Ignore if unable to read body
+        // }
+
+        // const errorMessage = `HTTP ${response.status}: ${response.statusText}${errorBody ? ` - ${errorBody}` : ''}`;
+        const errorMessage = `HTTP ${response.status}: ${response.statusText}`;
         throw new Error(errorMessage);
       }
 

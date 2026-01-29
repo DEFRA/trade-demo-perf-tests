@@ -78,6 +78,25 @@ export function postWithValidation(url, data, checkConditions, errorMessage, opt
   return response;
 }
 
+export function postRestWithValidation(url, data, checkConditions, errorMessage, params = {}) {
+
+  const response = http.post(url, data, params);
+
+  if (!check(response, checkConditions)) {
+    console.log(`Response status: ${response.status}`);
+    console.log(`Response URL: ${response.url}`);
+    throw new TestingError(errorMessage);
+  }
+
+  // Parse JSON response
+  const jsonResponse = JSON.parse(response.body);
+  if (!jsonResponse.success) {
+    throw new TestingError(`Draft save failed: ${jsonResponse.message}`);
+  }
+
+  return jsonResponse;
+}
+
 /**
  * Extracts crumb from response and throws error if not found
  * @param {object} response - HTTP response object
@@ -91,4 +110,18 @@ export function extractCrumbOrThrow(response, context) {
     throw new TestingError(`Crumb not found in response body (${context})`);
   }
   return crumb;
+}
+
+/**
+ * Extracts the CSRF token from meta tag for RESTful endpoints
+ * @param {string} body - HTML response body
+ * @returns {string|null} The CSRF token or null if not found
+ */
+export function extractCSRFTokenFromMeta(body) {
+  const csrfTokenMatch = body.match(/<meta\s+name=["']csrf-token["']\s+content=["']([^"']+)["']/i);
+  if (!csrfTokenMatch) {
+    console.warn('✗ Could not find <meta name="csrf-token"> in HTML');
+    return null;
+  }
+  return csrfTokenMatch[1];
 }

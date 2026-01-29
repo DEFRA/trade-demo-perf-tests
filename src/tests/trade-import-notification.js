@@ -15,14 +15,19 @@ import { PurposePage } from '../pages/purpose-page.js';
 import { TransportPage } from '../pages/transport-page.js';
 import { ReviewPage } from '../pages/review-page.js';
 import { generateImportNotificationData } from '../data/test-data.js';
+import { createHandleSummary } from '../utils/report-generator.js';
 
 // Custom metrics
 const journeyDuration = new Trend('notification_journey_duration');
 const authDuration = new Trend('auth_duration');
 const originStepDuration = new Trend('origin_step_duration');
 const commodityStepDuration = new Trend('commodity_step_duration');
+const purposeStepDuration = new Trend('purpose_step_duration');
+const transportStepDuration = new Trend('transport_step_duration');
+const saveStepDuration = new Trend('save_step_duration');
 const submitDuration = new Trend('submit_duration');
 const failedJourneys = new Counter('failed_journeys');
+const successfulJourneys = new Counter('successful_journey_counter');
 const authFailures = new Counter('auth_failures');
 
 // K6 test configuration
@@ -122,10 +127,14 @@ export default function () {
     commodityStepDuration.add(Date.now() - commodityStart);
 
     // Step 3: Purpose
+    const purposeStart = Date.now();
     crumb = purposePage.submit(crumb, testData.purpose, testData.internalMarketPurpose);
+    purposeStepDuration.add(Date.now() - purposeStart)
 
     // Step 4: Transport
+    const TransportStart = Date.now();
     crumb = transportPage.submit(crumb, testData.transport.bcp, testData.transport.type, testData.transport.vehicleId);
+    transportStepDuration.add(Date.now() - TransportStart);
 
     // Step 5: Review and validate
     reviewPage.validate(
@@ -135,6 +144,10 @@ export default function () {
       testData.internalMarketPurpose,
       testData.transport.bcp
     );
+
+    let saveStart = Date.now();
+    reviewPage.saveAsDraft();
+    saveStepDuration.add(Date.now() - saveStart);
 
     // Step 6: Change commodity quantities (testing the change flow)
     // Generate new quantities for the change scenario
@@ -158,10 +171,15 @@ export default function () {
       testData2.transport.bcp
     );
 
+    saveStart = Date.now();
+    reviewPage.saveAsDraft();
+    saveStepDuration.add(Date.now() - saveStart);
+
     const submitStart = Date.now();
     reviewPage.submit(crumb, true);
     submitDuration.add(Date.now() - submitStart);
 
+    successfulJourneys.add(1);
   } catch (e) {
     if (e instanceof TestingError) {
       console.log('name:', e.name);
@@ -183,134 +201,18 @@ export default function () {
   console.log(`VU ${__VU}: Journey completed successfully in ${journeyTime}ms`);
 }
 
-// Custom HTML report generator
-export function handleSummary(data) {
-  return {
-    'index.html': htmlReport(data),
-    'summary.json': JSON.stringify(data),
-  };
-}
-
-function htmlReport(data) {
-  const date = new Date().toISOString();
-  const metrics = data.metrics;
-
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Trade Demo Frontend - K6 Performance Test Report</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-    .container { max-width: 1400px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-    h1 { color: #005ea5; border-bottom: 3px solid #005ea5; padding-bottom: 15px; }
-    h2 { color: #333; margin-top: 40px; border-bottom: 2px solid #dee2e6; padding-bottom: 10px; }
-    .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin: 30px 0; }
-    .summary-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-    .summary-card h3 { margin: 0 0 10px 0; font-size: 14px; opacity: 0.9; }
-    .summary-card p { margin: 0; font-size: 28px; font-weight: bold; }
-    .summary-card.success { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
-    .summary-card.warning { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
-    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
-    th, td { border: 1px solid #dee2e6; padding: 12px; text-align: left; }
-    th { background-color: #005ea5; color: white; font-weight: bold; }
-    tr:nth-child(even) { background-color: #f8f9fa; }
-    .pass { color: #28a745; font-weight: bold; }
-    .fail { color: #dc3545; font-weight: bold; }
-    .metric-value { font-family: 'Courier New', monospace; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1>Trade Demo Frontend - Performance Test Report</h1>
-    <p><strong>Test:</strong> Import Notification Journey (Live Authentication)</p>
-    <p><strong>Generated:</strong> ${date}</p>
-    <p><strong>Duration:</strong> ${data.state?.testRunDurationMs ? (data.state.testRunDurationMs / 1000).toFixed(2) + 's' : 'N/A'}</p>
-
-    <div class="summary">
-      <div class="summary-card">
-        <h3>Virtual Users (Max)</h3>
-        <p>${metrics.vus?.values?.max || 'N/A'}</p>
-      </div>
-      <div class="summary-card success">
-        <h3>Total Requests</h3>
-        <p>${metrics.http_reqs?.values?.count || 'N/A'}</p>
-      </div>
-      <div class="summary-card">
-        <h3>Request Rate</h3>
-        <p>${metrics.http_reqs?.values?.rate ? metrics.http_reqs.values.rate.toFixed(2) + ' req/s' : 'N/A'}</p>
-      </div>
-      <div class="summary-card ${(metrics.http_req_failed?.values?.rate || 0) < 0.01 ? 'success' : 'warning'}">
-        <h3>Error Rate</h3>
-        <p>${metrics.http_req_failed?.values?.rate ? (metrics.http_req_failed.values.rate * 100).toFixed(2) + '%' : 'N/A'}</p>
-      </div>
-    </div>
-
-    <h2>Journey Metrics</h2>
-    <table>
-      <tr>
-        <th>Metric</th>
-        <th>Average</th>
-        <th>P95</th>
-        <th>P99</th>
-        <th>Max</th>
-      </tr>
-      ${['notification_journey_duration', 'auth_duration', 'origin_step_duration', 'commodity_step_duration', 'submit_duration', 'http_req_duration']
-        .filter(name => metrics[name])
-        .map(name => {
-          const m = metrics[name].values;
-          return `
-      <tr>
-        <td>${name.replace(/_/g, ' ')}</td>
-        <td class="metric-value">${m.avg?.toFixed(2) || 'N/A'} ms</td>
-        <td class="metric-value">${m['p(95)']?.toFixed(2) || 'N/A'} ms</td>
-        <td class="metric-value">${m['p(99)']?.toFixed(2) || 'N/A'} ms</td>
-        <td class="metric-value">${m.max?.toFixed(2) || 'N/A'} ms</td>
-      </tr>
-          `;
-        }).join('')}
-    </table>
-
-    <h2>Thresholds</h2>
-    <table>
-      <tr>
-        <th>Threshold</th>
-        <th>Status</th>
-      </tr>
-      ${Object.entries(data.metrics)
-        .filter(([_, metric]) => metric.thresholds)
-        .map(([name, metric]) => {
-          return Object.entries(metric.thresholds).map(([threshold, result]) => `
-      <tr>
-        <td>${name}: ${threshold}</td>
-        <td class="${result.ok ? 'pass' : 'fail'}">${result.ok ? '✓ PASS' : '✗ FAIL'}</td>
-      </tr>
-          `).join('');
-        }).join('')}
-    </table>
-
-    <h2>All Metrics</h2>
-    <table>
-      <tr>
-        <th>Metric</th>
-        <th>Count</th>
-        <th>Rate</th>
-      </tr>
-      ${Object.entries(metrics)
-        .filter(([name, _]) => name.includes('counter') || name.includes('failures') || name.includes('failed'))
-        .map(([name, metric]) => {
-          const values = metric.values || {};
-          return `
-      <tr>
-        <td>${name}</td>
-        <td class="metric-value">${values.count !== undefined ? values.count : 'N/A'}</td>
-        <td class="metric-value">${values.rate !== undefined ? values.rate.toFixed(4) : 'N/A'}</td>
-      </tr>
-          `;
-        }).join('')}
-    </table>
-  </div>
-</body>
-</html>
-`;
-}
+// HTML report generation using reusable report generator
+export const handleSummary = createHandleSummary({
+  title: 'Trade Demo Frontend - K6 Performance Test Report',
+  testName: 'Import Notification Journey (Live Authentication)',
+  journeyMetrics: [
+    'notification_journey_duration',
+    'auth_duration',
+    'origin_step_duration',
+    'commodity_step_duration',
+    'purpose_step_duration',
+    'transport_step_duration',
+    'save_step_duration',
+    'submit_duration'
+  ]
+});
