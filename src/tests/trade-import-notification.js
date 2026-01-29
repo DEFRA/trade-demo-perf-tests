@@ -30,6 +30,15 @@ const failedJourneys = new Counter('failed_journeys');
 const successfulJourneys = new Counter('successful_journey_counter');
 const authFailures = new Counter('auth_failures');
 
+// Page-level failure counters
+const originPageFailures = new Counter('origin_page_failures');
+const commodityPageFailures = new Counter('commodity_page_failures');
+const purposePageFailures = new Counter('purpose_page_failures');
+const transportPageFailures = new Counter('transport_page_failures');
+const reviewPageFailures = new Counter('review_page_failures');
+const saveFailures = new Counter('save_failures');
+const submitFailures = new Counter('submit_failures');
+
 // K6 test configuration
 export const options = getK6Options();
 
@@ -114,70 +123,133 @@ export default function () {
     dashboardPage.visit();
 
     // Step 1: Country of Origin
-    const originStart = Date.now();
-    let crumb = originPage.visit();
-    crumb = originPage.submit(crumb, testData.countryCode);
-    originStepDuration.add(Date.now() - originStart);
+    let crumb;
+    try {
+      const originStart = Date.now();
+      crumb = originPage.visit();
+      crumb = originPage.submit(crumb, testData.countryCode);
+      originStepDuration.add(Date.now() - originStart);
+    } catch (e) {
+      originPageFailures.add(1);
+      throw e;
+    }
 
     // Step 2: Commodity Selection
-    const commodityStart = Date.now();
-    crumb = commodityPage.searchCode(crumb, testData.commodity.code);
-    crumb = commodityPage.selectSpecies(crumb, testData.commodity.speciesType, testData.commodity.speciesId);
-    crumb = commodityPage.saveQuantities(crumb, testData.commodity.speciesId, testData.commodity.animals, testData.commodity.packs);
-    commodityStepDuration.add(Date.now() - commodityStart);
+    try {
+      const commodityStart = Date.now();
+      crumb = commodityPage.searchCode(crumb, testData.commodity.code);
+      crumb = commodityPage.selectSpecies(crumb, testData.commodity.speciesType, testData.commodity.speciesId);
+      crumb = commodityPage.saveQuantities(crumb, testData.commodity.speciesId, testData.commodity.animals, testData.commodity.packs);
+      commodityStepDuration.add(Date.now() - commodityStart);
+    } catch (e) {
+      commodityPageFailures.add(1);
+      throw e;
+    }
 
     // Step 3: Purpose
-    const purposeStart = Date.now();
-    crumb = purposePage.submit(crumb, testData.purpose, testData.internalMarketPurpose);
-    purposeStepDuration.add(Date.now() - purposeStart)
+    try {
+      const purposeStart = Date.now();
+      crumb = purposePage.submit(crumb, testData.purpose, testData.internalMarketPurpose);
+      purposeStepDuration.add(Date.now() - purposeStart);
+    } catch (e) {
+      purposePageFailures.add(1);
+      throw e;
+    }
 
     // Step 4: Transport
-    const TransportStart = Date.now();
-    crumb = transportPage.submit(crumb, testData.transport.bcp, testData.transport.type, testData.transport.vehicleId);
-    transportStepDuration.add(Date.now() - TransportStart);
+    try {
+      const TransportStart = Date.now();
+      crumb = transportPage.submit(crumb, testData.transport.bcp, testData.transport.type, testData.transport.vehicleId);
+      transportStepDuration.add(Date.now() - TransportStart);
+    } catch (e) {
+      transportPageFailures.add(1);
+      throw e;
+    }
 
     // Step 5: Review and validate
-    reviewPage.validate(
-      testData.countryCode,
-      testData.commodity.description,
-      testData.purpose,
-      testData.internalMarketPurpose,
-      testData.transport.bcp
-    );
+    try {
+      reviewPage.validate(
+        testData.countryCode,
+        testData.commodity.description,
+        testData.purpose,
+        testData.internalMarketPurpose,
+        testData.transport.bcp
+      );
+    } catch (e) {
+      reviewPageFailures.add(1);
+      throw e;
+    }
 
-    let saveStart = Date.now();
-    reviewPage.saveAsDraft();
-    saveStepDuration.add(Date.now() - saveStart);
+    try {
+      let saveStart = Date.now();
+      reviewPage.saveAsDraft();
+      saveStepDuration.add(Date.now() - saveStart);
+    } catch (e) {
+      saveFailures.add(1);
+      throw e;
+    }
 
     // Step 6: Change commodity quantities (testing the change flow)
     // Generate new quantities for the change scenario
     const newAnimals = Math.floor(testData.commodity.animals * 0.5); // Reduce by 50%
     const newPacks = Math.floor(testData.commodity.packs * 0.5);
 
-    crumb = commodityPage.change(crumb);
-    crumb = commodityPage.saveQuantities(crumb, testData.commodity.speciesId, newAnimals, newPacks);
+    try {
+      crumb = commodityPage.change(crumb);
+      crumb = commodityPage.saveQuantities(crumb, testData.commodity.speciesId, newAnimals, newPacks);
+    } catch (e) {
+      commodityPageFailures.add(1);
+      throw e;
+    }
 
     // Re-submit purpose and transport (generate new random data)
     const testData2 = generateImportNotificationData({ useWeightedCountries: true });
-    crumb = purposePage.submit(crumb, testData.purpose, testData2.internalMarketPurpose);
-    crumb = transportPage.submit(crumb, testData2.transport.bcp, testData2.transport.type, testData2.transport.vehicleId);
+
+    try {
+      crumb = purposePage.submit(crumb, testData.purpose, testData2.internalMarketPurpose);
+    } catch (e) {
+      purposePageFailures.add(1);
+      throw e;
+    }
+
+    try {
+      crumb = transportPage.submit(crumb, testData2.transport.bcp, testData2.transport.type, testData2.transport.vehicleId);
+    } catch (e) {
+      transportPageFailures.add(1);
+      throw e;
+    }
 
     // Step 7: Final validation and submit
-    reviewPage.validate(
-      testData.countryCode,
-      testData.commodity.description,
-      testData.purpose,
-      testData2.internalMarketPurpose,
-      testData2.transport.bcp
-    );
+    try {
+      reviewPage.validate(
+        testData.countryCode,
+        testData.commodity.description,
+        testData.purpose,
+        testData2.internalMarketPurpose,
+        testData2.transport.bcp
+      );
+    } catch (e) {
+      reviewPageFailures.add(1);
+      throw e;
+    }
 
-    saveStart = Date.now();
-    reviewPage.saveAsDraft();
-    saveStepDuration.add(Date.now() - saveStart);
+    try {
+      let saveStart = Date.now();
+      reviewPage.saveAsDraft();
+      saveStepDuration.add(Date.now() - saveStart);
+    } catch (e) {
+      saveFailures.add(1);
+      throw e;
+    }
 
-    const submitStart = Date.now();
-    reviewPage.submit(crumb, true);
-    submitDuration.add(Date.now() - submitStart);
+    try {
+      const submitStart = Date.now();
+      reviewPage.submit(crumb, true);
+      submitDuration.add(Date.now() - submitStart);
+    } catch (e) {
+      submitFailures.add(1);
+      throw e;
+    }
 
     successfulJourneys.add(1);
   } catch (e) {

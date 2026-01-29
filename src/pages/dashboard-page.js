@@ -15,7 +15,7 @@ export class DashboardPage {
   visit() {
     getWithValidation(
       this.url,
-      { 'dashboard loaded': (r) => r.status === 200 && r.url.endsWith('/dashboard') },
+      { 'Dashboard loaded': (r) => r.status === 200 && r.url.endsWith('/dashboard') },
       'Loading the Dashboard Page failed'
     );
   }

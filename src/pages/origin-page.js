@@ -43,8 +43,8 @@ export class OriginPage {
     const response = postWithValidation(
       this.url,
       formData,
-      { 'origin submitted': (r) => r.status === 200 && r.url.endsWith('/import/commodity/codes') },
-      'Origin submission failed'
+      { 'Country of Origin submitted': (r) => r.status === 200 && r.url.endsWith('/import/commodity/codes') },
+      'Country of Origin submission failed'
     );
 
     return extractCrumbOrThrow(response, 'After origin submission');
