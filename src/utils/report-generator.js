@@ -146,6 +146,32 @@ export function generateHtmlReport(data, options = {}) {
         }).join('')}
     </table>
 
+    <h2>Page Failures</h2>
+    <table>
+      <tr>
+        <th>Page</th>
+        <th>Failures</th>
+      </tr>
+      ${[
+        { metric: 'origin_page_failures', label: 'Origin Page' },
+        { metric: 'commodity_page_failures', label: 'Commodity Page' },
+        { metric: 'purpose_page_failures', label: 'Purpose Page' },
+        { metric: 'transport_page_failures', label: 'Transport Page' },
+        { metric: 'review_page_failures', label: 'Review Page' },
+        { metric: 'save_failures', label: 'Save as Draft' },
+        { metric: 'submit_failures', label: 'Submit' }
+      ].map(({ metric, label }) => {
+          const values = metrics[metric]?.values || {};
+          const count = values.count || 0;
+          return `
+      <tr>
+        <td>${label}</td>
+        <td class="metric-value ${count > 0 ? 'fail' : ''}">${count}</td>
+      </tr>
+          `;
+        }).join('')}
+    </table>
+
     <h2>All Metrics</h2>
     <table>
       <tr>
