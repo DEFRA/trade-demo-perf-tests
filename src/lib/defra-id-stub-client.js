@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 
 export class DefraIdStubClient {
   constructor(baseUrl = process.env.DEFRA_ID_STUB_URL || 'http://localhost:3200') {
-    this.baseUrl = baseUrl;
+    this.baseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
     this.registerEndpoint = `${baseUrl}/cdp-defra-id-stub/API/register`;
     this.maxRetries = 3;
     this.retryDelay = 1000; // ms
@@ -41,7 +41,7 @@ export class DefraIdStubClient {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(payload)
     });
   }
 
