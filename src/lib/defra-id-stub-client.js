@@ -1,9 +1,9 @@
 import { randomUUID } from 'crypto';
 
 export class DefraIdStubClient {
-  constructor(baseUrl = process.env.DEFRA_ID_STUB_URL || 'http://localhost:3200/cdp-defra-id-stub') {
+  constructor(baseUrl = process.env.DEFRA_ID_STUB_URL || 'http://localhost:3200') {
     this.baseUrl = baseUrl;
-    this.registerEndpoint = `${baseUrl}/API/register`;
+    this.registerEndpoint = `${baseUrl}/cdp-defra-id-stub/API/register`;
     this.maxRetries = 3;
     this.retryDelay = 1000; // ms
   }
@@ -99,7 +99,7 @@ export class DefraIdStubClient {
         // }
 
         // const errorMessage = `HTTP ${response.status}: ${response.statusText}${errorBody ? ` - ${errorBody}` : ''}`;
-        const errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        const errorMessage = `url: ${url} responded with HTTP ${response.status}: ${response.statusText}`;
         throw new Error(errorMessage);
       }
 

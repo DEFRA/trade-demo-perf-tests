@@ -11,7 +11,7 @@ import { threshold } from './thresholds.js';
 export const env = {
   // Target application URLs
   baseUrl: __ENV.TARGET_URL || 'http://localhost:3000',
-  defraIdStubUrl: __ENV.DEFRA_ID_STUB_URL || 'http://localhost:3200/cdp-defra-id-stub',
+  defraIdStubUrl: __ENV.DEFRA_ID_STUB_URL || 'http://localhost:3200',
 
   // User pool configuration for authentication
   userPool: {
