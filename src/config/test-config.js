@@ -113,6 +113,13 @@ export function getK6Options() {
       'checks': ['rate>0.95'],
       'auth_failures': ['count<5'],
       'failed_journeys': [`count<${vusMax * 0.05}`],
+
+      // Per-endpoint thresholds using tags
+      'http_req_duration{name:GetOriginPage}': ['p(95)<400'],
+      'http_req_duration{name:SubmitOriginPage}': ['p(95)<600'],
+      'http_req_duration{name:GetReviewPage}': ['p(95)<500'],
+      'http_req_duration{name:SaveDraft}': ['p(95)<800'],
+      'http_req_duration{name:SubmitNotification}': ['p(95)<1000'],
     };
   }
 

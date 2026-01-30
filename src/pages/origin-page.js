@@ -19,7 +19,8 @@ export class OriginPage {
     const response = getWithValidation(
       this.url,
       { 'Country of Origin loaded': (r) => r.status === 200 && r.url.endsWith('/import/consignment/origin') },
-      'Loading the Country of Origin page failed'
+      'Loading the Country of Origin page failed',
+      { tags: { name: 'GetOriginPage' } }
     );
 
     return extractCrumbOrThrow(response, 'Country of Origin page');
@@ -44,7 +45,8 @@ export class OriginPage {
       this.url,
       formData,
       { 'Country of Origin submitted': (r) => r.status === 200 && r.url.endsWith('/import/commodity/codes') },
-      'Country of Origin submission failed'
+      'Country of Origin submission failed',
+      { tags: { name: 'SubmitOriginPage' } }
     );
 
     return extractCrumbOrThrow(response, 'After origin submission');

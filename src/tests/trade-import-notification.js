@@ -3,7 +3,7 @@
 // Purpose: End-to-end load test with live DEFRA ID authentication
 
 import http from 'k6/http';
-import { check, sleep } from 'k6';
+import { check, sleep, group } from 'k6';
 import { Counter, Trend } from 'k6/metrics';
 import { randomIntBetween } from 'https://jslib.k6.io/k6-utils/1.2.0/index.js';
 import { TestingError, AuthenticationError } from './exceptions.js';
@@ -118,152 +118,171 @@ export default function () {
   console.log(`Test Data: ${testData.countryCode} -> ${testData.commodity.description}`);
 
   try {
-    authenticateUser(userEmail);
-    sleep(randomIntBetween(1, 2));  // Think time after login
+    // Group: Authentication and Dashboard
+    group('authentication', () => {
+      authenticateUser(userEmail);
+      sleep(randomIntBetween(1, 2));  // Think time after login
 
-    homePage.visit();
-    sleep(0.5);  // Brief pause viewing home page
+      homePage.visit();
+      sleep(0.5);  // Brief pause viewing home page
 
-    dashboardPage.visit();
-    sleep(randomIntBetween(1, 3));  // User reviews dashboard
+      dashboardPage.visit();
+      sleep(randomIntBetween(1, 3));  // User reviews dashboard
+    });
 
     // Step 1: Country of Origin
     let crumb;
-    try {
-      const originStart = Date.now();
-      crumb = originPage.visit();
-      crumb = originPage.submit(crumb, testData.countryCode);
-      originStepDuration.add(Date.now() - originStart);
-    } catch (e) {
-      originPageFailures.add(1);
-      throw e;
-    }
-    sleep(randomIntBetween(1, 3));  // User thinks about commodity selection
+    group('origin_step', () => {
+      try {
+        const originStart = Date.now();
+        crumb = originPage.visit();
+        crumb = originPage.submit(crumb, testData.countryCode);
+        originStepDuration.add(Date.now() - originStart);
+      } catch (e) {
+        originPageFailures.add(1);
+        throw e;
+      }
+      sleep(randomIntBetween(1, 3));  // User thinks about commodity selection
+    });
 
     // Step 2: Commodity Selection
-    try {
-      const commodityStart = Date.now();
-      crumb = commodityPage.searchCode(crumb, testData.commodity.code);
-      crumb = commodityPage.selectSpecies(crumb, testData.commodity.speciesType, testData.commodity.speciesId);
-      crumb = commodityPage.saveQuantities(crumb, testData.commodity.speciesId, testData.commodity.animals, testData.commodity.packs);
-      commodityStepDuration.add(Date.now() - commodityStart);
-    } catch (e) {
-      commodityPageFailures.add(1);
-      throw e;
-    }
-    sleep(randomIntBetween(1, 2));  // User considers purpose
+    group('commodity_step', () => {
+      try {
+        const commodityStart = Date.now();
+        crumb = commodityPage.searchCode(crumb, testData.commodity.code);
+        crumb = commodityPage.selectSpecies(crumb, testData.commodity.speciesType, testData.commodity.speciesId);
+        crumb = commodityPage.saveQuantities(crumb, testData.commodity.speciesId, testData.commodity.animals, testData.commodity.packs);
+        commodityStepDuration.add(Date.now() - commodityStart);
+      } catch (e) {
+        commodityPageFailures.add(1);
+        throw e;
+      }
+      sleep(randomIntBetween(1, 2));  // User considers purpose
+    });
 
     // Step 3: Purpose
-    try {
-      const purposeStart = Date.now();
-      crumb = purposePage.submit(crumb, testData.purpose, testData.internalMarketPurpose);
-      purposeStepDuration.add(Date.now() - purposeStart);
-    } catch (e) {
-      purposePageFailures.add(1);
-      throw e;
-    }
-    sleep(randomIntBetween(1, 2));  // User reviews transport options
+    group('purpose_step', () => {
+      try {
+        const purposeStart = Date.now();
+        crumb = purposePage.submit(crumb, testData.purpose, testData.internalMarketPurpose);
+        purposeStepDuration.add(Date.now() - purposeStart);
+      } catch (e) {
+        purposePageFailures.add(1);
+        throw e;
+      }
+      sleep(randomIntBetween(1, 2));  // User reviews transport options
+    });
 
     // Step 4: Transport
-    try {
-      const TransportStart = Date.now();
-      crumb = transportPage.submit(crumb, testData.transport.bcp, testData.transport.type, testData.transport.vehicleId);
-      transportStepDuration.add(Date.now() - TransportStart);
-    } catch (e) {
-      transportPageFailures.add(1);
-      throw e;
-    }
-    sleep(randomIntBetween(2, 4));  // User reviews all details before saving
+    group('transport_step', () => {
+      try {
+        const TransportStart = Date.now();
+        crumb = transportPage.submit(crumb, testData.transport.bcp, testData.transport.type, testData.transport.vehicleId);
+        transportStepDuration.add(Date.now() - TransportStart);
+      } catch (e) {
+        transportPageFailures.add(1);
+        throw e;
+      }
+      sleep(randomIntBetween(2, 4));  // User reviews all details before saving
+    });
 
     // Step 5: Review and validate
-    try {
-      reviewPage.validate(
-        testData.countryCode,
-        testData.commodity.description,
-        testData.purpose,
-        testData.internalMarketPurpose,
-        testData.transport.bcp
-      );
-    } catch (e) {
-      reviewPageFailures.add(1);
-      throw e;
-    }
+    group('review_and_save', () => {
+      try {
+        reviewPage.validate(
+          testData.countryCode,
+          testData.commodity.description,
+          testData.purpose,
+          testData.internalMarketPurpose,
+          testData.transport.bcp
+        );
+      } catch (e) {
+        reviewPageFailures.add(1);
+        throw e;
+      }
 
-    try {
-      let saveStart = Date.now();
-      reviewPage.saveAsDraft();
-      saveStepDuration.add(Date.now() - saveStart);
-    } catch (e) {
-      saveFailures.add(1);
-      throw e;
-    }
-    sleep(randomIntBetween(1, 2));  // User decides to make changes
+      try {
+        let saveStart = Date.now();
+        reviewPage.saveAsDraft();
+        saveStepDuration.add(Date.now() - saveStart);
+      } catch (e) {
+        saveFailures.add(1);
+        throw e;
+      }
+      sleep(randomIntBetween(1, 2));  // User decides to make changes
+    });
 
     // Step 6: Change commodity quantities (testing the change flow)
     // Generate new quantities for the change scenario
     const newAnimals = Math.floor(testData.commodity.animals * 0.5); // Reduce by 50%
     const newPacks = Math.floor(testData.commodity.packs * 0.5);
-
-    try {
-      crumb = commodityPage.change(crumb);
-      crumb = commodityPage.saveQuantities(crumb, testData.commodity.speciesId, newAnimals, newPacks);
-    } catch (e) {
-      commodityPageFailures.add(1);
-      throw e;
-    }
-    sleep(randomIntBetween(1, 2));  // User reviews changes
-
-    // Re-submit purpose and transport (generate new random data)
     const testData2 = generateImportNotificationData({ useWeightedCountries: true });
 
-    try {
-      crumb = purposePage.submit(crumb, testData.purpose, testData2.internalMarketPurpose);
-    } catch (e) {
-      purposePageFailures.add(1);
-      throw e;
-    }
-    sleep(randomIntBetween(1, 2));  // User reviews updated purpose
+    group('change_flow', () => {
+      try {
+        crumb = commodityPage.change(crumb);
+        crumb = commodityPage.saveQuantities(crumb, testData.commodity.speciesId, newAnimals, newPacks);
+      } catch (e) {
+        commodityPageFailures.add(1);
+        throw e;
+      }
+      sleep(randomIntBetween(1, 2));  // User reviews changes
 
-    try {
-      crumb = transportPage.submit(crumb, testData2.transport.bcp, testData2.transport.type, testData2.transport.vehicleId);
-    } catch (e) {
-      transportPageFailures.add(1);
-      throw e;
-    }
-    sleep(randomIntBetween(2, 4));  // User carefully reviews final details
+      // Re-submit purpose and transport (generate new random data)
+
+      try {
+        crumb = purposePage.submit(crumb, testData.purpose, testData2.internalMarketPurpose);
+      } catch (e) {
+        purposePageFailures.add(1);
+        throw e;
+      }
+      sleep(randomIntBetween(1, 2));  // User reviews updated purpose
+
+      try {
+        crumb = transportPage.submit(crumb, testData2.transport.bcp, testData2.transport.type, testData2.transport.vehicleId);
+      } catch (e) {
+        transportPageFailures.add(1);
+        throw e;
+      }
+      sleep(randomIntBetween(2, 4));  // User carefully reviews final details
+    });
 
     // Step 7: Final validation and submit
-    try {
-      reviewPage.validate(
-        testData.countryCode,
-        testData.commodity.description,
-        testData.purpose,
-        testData2.internalMarketPurpose,
-        testData2.transport.bcp
-      );
-    } catch (e) {
-      reviewPageFailures.add(1);
-      throw e;
-    }
+    group('review_and_save', () => {
+      try {
+        reviewPage.validate(
+          testData.countryCode,
+          testData.commodity.description,
+          testData.purpose,
+          testData2.internalMarketPurpose,
+          testData2.transport.bcp
+        );
+      } catch (e) {
+        reviewPageFailures.add(1);
+        throw e;
+      }
 
-    try {
-      let saveStart = Date.now();
-      reviewPage.saveAsDraft();
-      saveStepDuration.add(Date.now() - saveStart);
-    } catch (e) {
-      saveFailures.add(1);
-      throw e;
-    }
-    sleep(randomIntBetween(1, 3));  // User prepares to submit
+      try {
+        let saveStart = Date.now();
+        reviewPage.saveAsDraft();
+        saveStepDuration.add(Date.now() - saveStart);
+      } catch (e) {
+        saveFailures.add(1);
+        throw e;
+      }
+      sleep(randomIntBetween(1, 3));  // User prepares to submit
+    });
 
-    try {
-      const submitStart = Date.now();
-      reviewPage.submit(crumb, true);
-      submitDuration.add(Date.now() - submitStart);
-    } catch (e) {
-      submitFailures.add(1);
-      throw e;
-    }
+    group('submit', () => {
+      try {
+        const submitStart = Date.now();
+        reviewPage.submit(crumb, true);
+        submitDuration.add(Date.now() - submitStart);
+      } catch (e) {
+        submitFailures.add(1);
+        throw e;
+      }
+    });
 
     successfulJourneys.add(1);
   } catch (e) {

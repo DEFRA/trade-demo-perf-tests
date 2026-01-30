@@ -26,7 +26,8 @@ export class CommodityPage {
         'Commodity Codes Searched': (r) =>
           r.status === 200 && r.url === searchUrl
       },
-      'Commodity Code search failed'
+      'Commodity Code search failed',
+      { tags: { name: 'CommodityCodeSelection' } }
     );
 
     return extractCrumbOrThrow(response, 'Commodity code search');
@@ -51,7 +52,8 @@ export class CommodityPage {
         'Commodity Species Selected': (r) =>
           r.status === 200 && r.url.endsWith('/import/commodity/codes/quantities')
       },
-      'Commodity Species Selection failed'
+      'Commodity Species Selection failed',
+      { tags: { name: 'SelectCommoditySpecies' } }
     );
 
     return extractCrumbOrThrow(response, 'Commodity species selection');
@@ -77,7 +79,8 @@ export class CommodityPage {
         'Commodity Quantities Saved': (r) =>
           r.status === 200 && r.url.endsWith('/import/consignment/purpose')
       },
-      'Saving the Commodity Quantities failed'
+      'Saving the Commodity Quantities failed',
+      { tags: { name: 'SaveCommodityQuantities' } }
     );
 
     return extractCrumbOrThrow(response, 'Commodity quantities save');
@@ -100,7 +103,8 @@ export class CommodityPage {
         'Commodity Codes Changed': (r) =>
           r.status === 200 && r.url.endsWith('/import/commodity/codes/quantities')
       },
-      'Changing the Commodity Codes failed'
+      'Changing the Commodity Codes failed',
+      { tags: { name: 'ChangeCommodityCode' } }
     );
 
     return extractCrumbOrThrow(response, 'Commodity codes change');

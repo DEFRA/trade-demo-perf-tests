@@ -101,7 +101,71 @@ export function generateHtmlReport(data, options = {}) {
         <h3>Error Rate</h3>
         <p>${metrics.http_req_failed?.values?.rate ? (metrics.http_req_failed.values.rate * 100).toFixed(2) + '%' : 'N/A'}</p>
       </div>
+      ${generateEnhancedSummaryCards(metrics)}
     </div>
+
+    <h2>Journey Section Performance</h2>
+    <table>
+      <tr>
+        <th>Section</th>
+        <th>Average</th>
+        <th>Min</th>
+        <th>P95</th>
+        <th>Max</th>
+      </tr>
+      ${['authentication', 'origin_step', 'commodity_step', 'purpose_step', 'transport_step', 'review_and_save', 'change_flow', 'submit']
+        .map(groupName => {
+          const metricName = `group_duration{group:::${groupName}}`;
+          const metric = metrics[metricName];
+          if (!metric) return '';
+          const m = metric.values;
+          return `
+      <tr>
+        <td>${groupName.replace(/_/g, ' ')}</td>
+        <td class="metric-value">${(m.avg/1000).toFixed(2) || 'N/A'}s</td>
+        <td class="metric-value">${(m.min/1000).toFixed(2) || 'N/A'}s</td>
+        <td class="metric-value">${(m['p(95)']/1000).toFixed(2) || 'N/A'}s</td>
+        <td class="metric-value">${(m.max/1000).toFixed(2) || 'N/A'}s</td>
+      </tr>
+          `;
+        }).filter(row => row !== '').join('')}
+    </table>
+
+    <h2>Endpoint Performance</h2>
+    <table>
+      <tr>
+        <th>Endpoint</th>
+        <th>Count</th>
+        <th>Average</th>
+        <th>P95</th>
+        <th>Max</th>
+        <th>Threshold</th>
+      </tr>
+      ${[
+        { name: 'GetOriginPage', label: 'Get Origin Page', threshold: 400 },
+        { name: 'SubmitOriginPage', label: 'Submit Origin', threshold: 600 },
+        { name: 'GetReviewPage', label: 'Get Review Page', threshold: 500 },
+        { name: 'SaveDraft', label: 'Save as Draft', threshold: 800 },
+        { name: 'SubmitNotification', label: 'Submit Notification', threshold: 1000 }
+      ].map(({ name, label, threshold }) => {
+          const metricName = `http_req_duration{name:${name}}`;
+          const metric = metrics[metricName];
+          if (!metric) return '';
+          const m = metric.values;
+          const p95 = m['p(95)']?.toFixed(2) || 0;
+          const withinThreshold = p95 <= threshold;
+          return `
+      <tr>
+        <td>${label}</td>
+        <td class="metric-value">${m.count || 'N/A'}</td>
+        <td class="metric-value">${m.avg?.toFixed(2) || 'N/A'} ms</td>
+        <td class="metric-value ${!withinThreshold ? 'fail' : ''}">${p95} ms</td>
+        <td class="metric-value">${m.max?.toFixed(2) || 'N/A'} ms</td>
+        <td class="metric-value">&lt; ${threshold}ms</td>
+      </tr>
+          `;
+        }).filter(row => row !== '').join('')}
+    </table>
 
     <h2>Journey Metrics</h2>
     <table>
@@ -368,6 +432,92 @@ function extractWorkloadConfig(data) {
     executor,
     details
   };
+}
+
+/**
+ * Generates enhanced summary cards with executive insights
+ * @param {Object} metrics - K6 metrics object
+ * @returns {string} HTML for enhanced summary cards
+ */
+function generateEnhancedSummaryCards(metrics) {
+  const cards = [];
+
+  // 1. Slowest Section - Find the group with highest average duration
+  const groupNames = ['authentication', 'origin_step', 'commodity_step', 'purpose_step', 'transport_step', 'review_and_save', 'change_flow', 'submit'];
+  let slowestGroup = { name: 'N/A', duration: 0 };
+
+  groupNames.forEach(groupName => {
+    const metricName = `group_duration{group:::${groupName}}`;
+    const metric = metrics[metricName];
+    if (metric && metric.values && metric.values.avg > slowestGroup.duration) {
+      slowestGroup = {
+        name: groupName.replace(/_/g, ' '),
+        duration: metric.values.avg
+      };
+    }
+  });
+
+  cards.push(`
+      <div class="summary-card ${slowestGroup.duration > 5000 ? 'warning' : ''}">
+        <h3>Slowest Section</h3>
+        <p>${slowestGroup.name}</p>
+        <p style="font-size: 16px; margin-top: 5px;">${(slowestGroup.duration / 1000).toFixed(2)}s avg</p>
+      </div>
+  `);
+
+  // 2. Most Failed Page - Find which page has most failures
+  const pageFailures = [
+    { metric: 'origin_page_failures', label: 'Origin' },
+    { metric: 'commodity_page_failures', label: 'Commodity' },
+    { metric: 'purpose_page_failures', label: 'Purpose' },
+    { metric: 'transport_page_failures', label: 'Transport' },
+    { metric: 'review_page_failures', label: 'Review' },
+    { metric: 'save_failures', label: 'Save' },
+    { metric: 'submit_failures', label: 'Submit' }
+  ];
+
+  let mostFailedPage = { label: 'None', count: 0 };
+  pageFailures.forEach(({ metric, label }) => {
+    const count = metrics[metric]?.values?.count || 0;
+    if (count > mostFailedPage.count) {
+      mostFailedPage = { label, count };
+    }
+  });
+
+  cards.push(`
+      <div class="summary-card ${mostFailedPage.count > 0 ? 'warning' : 'success'}">
+        <h3>Most Failed Page</h3>
+        <p>${mostFailedPage.label}</p>
+        <p style="font-size: 16px; margin-top: 5px;">${mostFailedPage.count} failures</p>
+      </div>
+  `);
+
+  // 3. Success Rate - Calculate journey success rate
+  const successfulJourneys = metrics.successful_journey_counter?.values?.count || 0;
+  const failedJourneys = metrics.failed_journeys?.values?.count || 0;
+  const totalJourneys = successfulJourneys + failedJourneys;
+  const successRate = totalJourneys > 0 ? (successfulJourneys / totalJourneys * 100) : 100;
+
+  cards.push(`
+      <div class="summary-card ${successRate >= 95 ? 'success' : 'warning'}">
+        <h3>Journey Success Rate</h3>
+        <p>${successRate.toFixed(1)}%</p>
+        <p style="font-size: 16px; margin-top: 5px;">${successfulJourneys} / ${totalJourneys}</p>
+      </div>
+  `);
+
+  // 4. Average Journey Time
+  const avgJourneyTime = metrics.notification_journey_duration?.values?.avg || 0;
+
+  cards.push(`
+      <div class="summary-card">
+        <h3>Avg Journey Time</h3>
+        <p>${(avgJourneyTime / 1000).toFixed(2)}s</p>
+        <p style="font-size: 16px; margin-top: 5px;">P95: ${((metrics.notification_journey_duration?.values?.['p(95)'] || 0) / 1000).toFixed(2)}s</p>
+      </div>
+  `);
+
+  return cards.join('');
 }
 
 /**

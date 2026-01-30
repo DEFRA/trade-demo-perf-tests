@@ -32,7 +32,8 @@ export class PurposePage {
         'Purpose submitted': (r) =>
           r.status === 200 && r.url.endsWith('/import/transport')
       },
-      'Saving the purpose failed'
+      'Saving the purpose failed',
+    { tags: { name: 'Submit Purpose'} }
     );
 
     return extractCrumbOrThrow(response, 'Purpose submission');
