@@ -3,8 +3,9 @@
 // Purpose: End-to-end load test with live DEFRA ID authentication
 
 import http from 'k6/http';
-import { check } from 'k6';
+import { check, sleep } from 'k6';
 import { Counter, Trend } from 'k6/metrics';
+import { randomIntBetween } from 'https://jslib.k6.io/k6-utils/1.2.0/index.js';
 import { TestingError, AuthenticationError } from './exceptions.js';
 import { env, getK6Options, getUserEmail } from '../config/test-config.js';
 import { HomePage } from '../pages/home-page.js';
@@ -118,9 +119,13 @@ export default function () {
 
   try {
     authenticateUser(userEmail);
+    sleep(randomIntBetween(1, 2));  // Think time after login
 
     homePage.visit();
+    sleep(0.5);  // Brief pause viewing home page
+
     dashboardPage.visit();
+    sleep(randomIntBetween(1, 3));  // User reviews dashboard
 
     // Step 1: Country of Origin
     let crumb;
@@ -133,6 +138,7 @@ export default function () {
       originPageFailures.add(1);
       throw e;
     }
+    sleep(randomIntBetween(1, 3));  // User thinks about commodity selection
 
     // Step 2: Commodity Selection
     try {
@@ -145,6 +151,7 @@ export default function () {
       commodityPageFailures.add(1);
       throw e;
     }
+    sleep(randomIntBetween(1, 2));  // User considers purpose
 
     // Step 3: Purpose
     try {
@@ -155,6 +162,7 @@ export default function () {
       purposePageFailures.add(1);
       throw e;
     }
+    sleep(randomIntBetween(1, 2));  // User reviews transport options
 
     // Step 4: Transport
     try {
@@ -165,6 +173,7 @@ export default function () {
       transportPageFailures.add(1);
       throw e;
     }
+    sleep(randomIntBetween(2, 4));  // User reviews all details before saving
 
     // Step 5: Review and validate
     try {
@@ -188,6 +197,7 @@ export default function () {
       saveFailures.add(1);
       throw e;
     }
+    sleep(randomIntBetween(1, 2));  // User decides to make changes
 
     // Step 6: Change commodity quantities (testing the change flow)
     // Generate new quantities for the change scenario
@@ -201,6 +211,7 @@ export default function () {
       commodityPageFailures.add(1);
       throw e;
     }
+    sleep(randomIntBetween(1, 2));  // User reviews changes
 
     // Re-submit purpose and transport (generate new random data)
     const testData2 = generateImportNotificationData({ useWeightedCountries: true });
@@ -211,6 +222,7 @@ export default function () {
       purposePageFailures.add(1);
       throw e;
     }
+    sleep(randomIntBetween(1, 2));  // User reviews updated purpose
 
     try {
       crumb = transportPage.submit(crumb, testData2.transport.bcp, testData2.transport.type, testData2.transport.vehicleId);
@@ -218,6 +230,7 @@ export default function () {
       transportPageFailures.add(1);
       throw e;
     }
+    sleep(randomIntBetween(2, 4));  // User carefully reviews final details
 
     // Step 7: Final validation and submit
     try {
@@ -241,6 +254,7 @@ export default function () {
       saveFailures.add(1);
       throw e;
     }
+    sleep(randomIntBetween(1, 3));  // User prepares to submit
 
     try {
       const submitStart = Date.now();
