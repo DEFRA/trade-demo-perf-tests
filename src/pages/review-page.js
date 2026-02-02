@@ -154,7 +154,7 @@ export class ReviewPage {
     if (!check(jsonResponse, {
       'Draft saved successfully': (j) => j.success && j.message === 'Draft saved successfully'
     })) {
-      throw new TestingError('Draft not saved successully');
+      throw new TestingError('Draft not saved successfully');
     }
     console.log(`✓ Draft saved successfully. ID: ${jsonResponse.notificationId || 'new'}`);
   }

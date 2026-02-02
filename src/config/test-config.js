@@ -102,8 +102,8 @@ export function getK6Options() {
       ],
       'http_req_failed': [`rate<${__ENV.THRESHOLD_ERROR_RATE || '0.01'}`],
       'checks': ['rate>0.95'],
-      'auth_failures': ['count<5'],
-      'failed_journeys': [`count<${vusMax * 0.05}`], // Max 5% failed journeys
+      'authorisation_failures': ['count<5'],
+      'failed_journey_counter': [`count<${vusMax * 0.05}`], // Max 5% failed journeys
     };
   } else {
     // Profile mode: use threshold profile
@@ -111,12 +111,19 @@ export function getK6Options() {
     thresholds = {
       ...threshold,
       'checks': ['rate>0.95'],
-      'auth_failures': ['count<5'],
-      'failed_journeys': [`count<${vusMax * 0.05}`],
+      'authorisation_failures': ['count<5'],
+      'failed_journey_counter': [`count<${vusMax * 0.05}`],
 
       // Per-endpoint thresholds using tags
+      'http_req_duration{name:GetHomePage}': ['p(95)<200'],
+      'http_req_duration{name:getDashboardPage}': ['p(95)<400'],
       'http_req_duration{name:GetOriginPage}': ['p(95)<400'],
       'http_req_duration{name:SubmitOriginPage}': ['p(95)<600'],
+      'http_req_duration{name:CommodityCodeSelection}': ['p(95)<600'],
+      'http_req_duration{name:SelectCommoditySpecies}': ['p(95)<600'],
+      'http_req_duration{name:SaveCommodityQuantities}': ['p(95)<600'],
+      'http_req_duration{name:SubmitPurpose}': ['p(95)<600'],
+      'http_req_duration{name:SubmitTransportPage}': ['p(95)<600'],
       'http_req_duration{name:GetReviewPage}': ['p(95)<500'],
       'http_req_duration{name:SaveDraft}': ['p(95)<800'],
       'http_req_duration{name:SubmitNotification}': ['p(95)<1000'],

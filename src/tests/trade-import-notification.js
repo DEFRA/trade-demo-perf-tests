@@ -20,19 +20,27 @@ import { createHandleSummary } from '../utils/report-generator.js';
 
 // Custom metrics
 const journeyDuration = new Trend('notification_journey_duration');
-const authDuration = new Trend('auth_duration');
-const originStepDuration = new Trend('origin_step_duration');
-const commodityStepDuration = new Trend('commodity_step_duration');
-const purposeStepDuration = new Trend('purpose_step_duration');
-const transportStepDuration = new Trend('transport_step_duration');
-const saveStepDuration = new Trend('save_step_duration');
-const submitDuration = new Trend('submit_duration');
-const failedJourneys = new Counter('failed_journeys');
+const authDuration = new Trend('authorisation_duration');
+const homeStepDuration = new Trend('get_home_page_step_duration');
+const dashboardStepDuration = new Trend('get_dashboard_step_duration');
+const originStepDuration = new Trend('get_country_of_origin_step_duration');
+const originSelectionStepDuration = new Trend('post_country_of_origin_step_duration');
+const commoditySelectionStepDuration = new Trend('get_commodity_selection_step_duration');
+const commoditySpeciesStepDuration = new Trend('get_commodity_species_step_duration');
+const commodityQuantitiesStepDuration = new Trend('get_commodity_quantities_step_duration');
+const purposeStepDuration = new Trend('post_purpose_step_duration');
+const transportStepDuration = new Trend('post_transport_step_duration');
+const saveStepDuration = new Trend('post_save_step_duration');
+const submitDuration = new Trend('post_submit_step_duration');
+const failedJourneys = new Counter('failed_journey_counter');
 const successfulJourneys = new Counter('successful_journey_counter');
-const authFailures = new Counter('auth_failures');
+
 
 // Page-level failure counters
-const originPageFailures = new Counter('origin_page_failures');
+const authFailures = new Counter('authorisation_failures');
+const homePageFailures = new Counter('home_page_failures');
+const dashboardFailures = new Counter('dashboard_page_failures');
+const originPageFailures = new Counter('country_of_origin_failures');
 const commodityPageFailures = new Counter('commodity_page_failures');
 const purposePageFailures = new Counter('purpose_page_failures');
 const transportPageFailures = new Counter('transport_page_failures');
@@ -50,7 +58,7 @@ AuthenticationError.prototype = Object.create(Error.prototype);
 function authenticateUser(userEmail) {
   const authStart = Date.now();
 
-  console.log(`VU ${__VU}: Starting authentication for ${userEmail}`);
+  console.log(`VU ${__VU}: Starting authorisation for ${userEmail}`);
 
   // Step 1: Navigate to login endpoint - this triggers OAuth flow
   let response = http.get(`${env.baseUrl}/auth/login`, {
@@ -85,8 +93,8 @@ function authenticateUser(userEmail) {
   console.log(`VU ${__VU}: Following callback redirect...`);
 
   // The final response should be 200 and show authenticated content
-  if (!check(response, { 'authentication successful': (r) => r.status === 200 && r.url === env.baseUrl + '/'})) {
-    throw new AuthenticationError(`Authentication failed - final status ${response.status}`);
+  if (!check(response, { 'Authorisation successful': (r) => r.status === 200 && r.url === env.baseUrl + '/'})) {
+    throw new AuthenticationError(`Authorisation failed - final status ${response.status}`);
   }
 
   authDuration.add(Date.now() - authStart);
@@ -119,25 +127,52 @@ export default function () {
 
   try {
     // Group: Authentication and Dashboard
-    group('authentication', () => {
-      authenticateUser(userEmail);
-      sleep(randomIntBetween(1, 2));  // Think time after login
+    group('authorisation', () => {
+      try {
+        authenticateUser(userEmail);
+        sleep(randomIntBetween(1, 2));  // Think time after login
+      } catch (e) {
+        authFailures.add(1);
+        throw e;
+      }
 
-      homePage.visit();
-      sleep(0.5);  // Brief pause viewing home page
-
-      dashboardPage.visit();
-      sleep(randomIntBetween(1, 3));  // User reviews dashboard
     });
+
+    group('home_page', () => {
+      try {
+        const homeStart = Date.now();
+        homePage.visit();
+        homeStepDuration.add(Date.now() - homeStart);
+        sleep(0.5);  // Brief pause viewing home page
+      } catch (e) {
+        homePageFailures.add(1);
+        throw e;
+      }
+    })
+
+    group('dashboard', () => {
+      try {
+      const dashboardStart = Date.now();
+      dashboardPage.visit();
+      dashboardStepDuration.add(Date.now() - dashboardStart);
+      sleep(randomIntBetween(1, 3));  // User reviews dashboard
+      } catch (e) {
+        dashboardFailures.add(1);
+        throw e;
+      }
+    })
 
     // Step 1: Country of Origin
     let crumb;
-    group('origin_step', () => {
+    group('country_of_origin', () => {
       try {
         const originStart = Date.now();
         crumb = originPage.visit();
-        crumb = originPage.submit(crumb, testData.countryCode);
         originStepDuration.add(Date.now() - originStart);
+
+        const originSelectionStart = Date.now();
+        crumb = originPage.submit(crumb, testData.countryCode);
+        originSelectionStepDuration.add(Date.now() - originSelectionStart);
       } catch (e) {
         originPageFailures.add(1);
         throw e;
@@ -146,13 +181,19 @@ export default function () {
     });
 
     // Step 2: Commodity Selection
-    group('commodity_step', () => {
+    group('commodity', () => {
       try {
         const commodityStart = Date.now();
         crumb = commodityPage.searchCode(crumb, testData.commodity.code);
+        commoditySelectionStepDuration.add(Date.now() - commodityStart);
+
+        const commoditySpeciesStart = Date.now();
         crumb = commodityPage.selectSpecies(crumb, testData.commodity.speciesType, testData.commodity.speciesId);
+        commoditySpeciesStepDuration.add(Date.now() - commoditySpeciesStart);
+
+        const commodityQuantitiesStart = Date.now();
         crumb = commodityPage.saveQuantities(crumb, testData.commodity.speciesId, testData.commodity.animals, testData.commodity.packs);
-        commodityStepDuration.add(Date.now() - commodityStart);
+        commodityQuantitiesStepDuration.add(Date.now() - commodityQuantitiesStart);
       } catch (e) {
         commodityPageFailures.add(1);
         throw e;
@@ -161,7 +202,7 @@ export default function () {
     });
 
     // Step 3: Purpose
-    group('purpose_step', () => {
+    group('purpose', () => {
       try {
         const purposeStart = Date.now();
         crumb = purposePage.submit(crumb, testData.purpose, testData.internalMarketPurpose);
@@ -174,11 +215,11 @@ export default function () {
     });
 
     // Step 4: Transport
-    group('transport_step', () => {
+    group('transport', () => {
       try {
-        const TransportStart = Date.now();
+        const transportStart = Date.now();
         crumb = transportPage.submit(crumb, testData.transport.bcp, testData.transport.type, testData.transport.vehicleId);
-        transportStepDuration.add(Date.now() - TransportStart);
+        transportStepDuration.add(Date.now() - transportStart);
       } catch (e) {
         transportPageFailures.add(1);
         throw e;
@@ -187,20 +228,20 @@ export default function () {
     });
 
     // Step 5: Review and validate
-    group('review_and_save', () => {
-      try {
-        reviewPage.validate(
-          testData.countryCode,
-          testData.commodity.description,
-          testData.purpose,
-          testData.internalMarketPurpose,
-          testData.transport.bcp
-        );
-      } catch (e) {
-        reviewPageFailures.add(1);
-        throw e;
-      }
 
+    try {
+      reviewPage.validate(
+        testData.countryCode,
+        testData.commodity.description,
+        testData.purpose,
+        testData.internalMarketPurpose,
+        testData.transport.bcp
+      );
+    } catch (e) {
+      reviewPageFailures.add(1);
+      throw e;
+    }
+    group('save', () => {
       try {
         let saveStart = Date.now();
         reviewPage.saveAsDraft();
@@ -220,8 +261,12 @@ export default function () {
 
     group('change_flow', () => {
       try {
+        const commoditySelectionStart = Date.now();
         crumb = commodityPage.change(crumb);
+        commoditySelectionStepDuration.add(Date.now() - commoditySelectionStart);
+        const commodityQuantitiesStart = Date.now();
         crumb = commodityPage.saveQuantities(crumb, testData.commodity.speciesId, newAnimals, newPacks);
+        commodityQuantitiesStepDuration.add(Date.now() - commodityQuantitiesStart);
       } catch (e) {
         commodityPageFailures.add(1);
         throw e;
@@ -231,7 +276,9 @@ export default function () {
       // Re-submit purpose and transport (generate new random data)
 
       try {
+        const purposeStart = Date.now();
         crumb = purposePage.submit(crumb, testData.purpose, testData2.internalMarketPurpose);
+        purposeStepDuration.add(Date.now() - purposeStart);
       } catch (e) {
         purposePageFailures.add(1);
         throw e;
@@ -239,7 +286,9 @@ export default function () {
       sleep(randomIntBetween(1, 2));  // User reviews updated purpose
 
       try {
+        const transportStart = Date.now();
         crumb = transportPage.submit(crumb, testData2.transport.bcp, testData2.transport.type, testData2.transport.vehicleId);
+        transportStepDuration.add(Date.now() - transportStart);
       } catch (e) {
         transportPageFailures.add(1);
         throw e;
@@ -247,21 +296,21 @@ export default function () {
       sleep(randomIntBetween(2, 4));  // User carefully reviews final details
     });
 
-    // Step 7: Final validation and submit
-    group('review_and_save', () => {
-      try {
-        reviewPage.validate(
-          testData.countryCode,
-          testData.commodity.description,
-          testData.purpose,
-          testData2.internalMarketPurpose,
-          testData2.transport.bcp
-        );
-      } catch (e) {
-        reviewPageFailures.add(1);
-        throw e;
-      }
+    try {
+      reviewPage.validate(
+        testData.countryCode,
+        testData.commodity.description,
+        testData.purpose,
+        testData2.internalMarketPurpose,
+        testData2.transport.bcp
+      );
+    } catch (e) {
+      reviewPageFailures.add(1);
+      throw e;
+    }
 
+    // Step 7: Final validation and submit
+    group('save', () => {
       try {
         let saveStart = Date.now();
         reviewPage.saveAsDraft();
@@ -309,15 +358,5 @@ export default function () {
 // HTML report generation using reusable report generator
 export const handleSummary = createHandleSummary({
   title: 'Trade Demo Frontend - K6 Performance Test Report',
-  testName: 'Import Notification Journey (Live Authentication)',
-  journeyMetrics: [
-    'notification_journey_duration',
-    'auth_duration',
-    'origin_step_duration',
-    'commodity_step_duration',
-    'purpose_step_duration',
-    'transport_step_duration',
-    'save_step_duration',
-    'submit_duration'
-  ]
+  testName: 'Import Notification Journey (Stub Authentication)'
 });

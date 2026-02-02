@@ -3,6 +3,7 @@
 
 import { env } from '../config/test-config.js';
 import { workload } from '../config/workloads.js';
+import {threshold} from "../config/thresholds.js";
 
 /**
  * Generates an HTML report from K6 test results
@@ -10,24 +11,14 @@ import { workload } from '../config/workloads.js';
  * @param {Object} options - Report customization options
  * @param {string} options.title - Report title (default: "K6 Performance Test Report")
  * @param {string} options.testName - Name of the test (default: "Performance Test")
- * @param {Array<string>} options.journeyMetrics - List of custom journey metrics to include
  * @returns {string} HTML report content
  */
 export function generateHtmlReport(data, options = {}) {
   const {
     title = 'K6 Performance Test Report',
-    testName = 'Performance Test',
-    journeyMetrics = [
-      'notification_journey_duration',
-      'auth_duration',
-      'origin_step_duration',
-      'commodity_step_duration',
-      'purpose_step_duration',
-      'transport_step_duration',
-      'save_step_duration',
-      'submit_duration'
-    ]
+    testName = 'Performance Test'
   } = options;
+
 
   const date = new Date().toISOString();
   const metrics = data.metrics;
@@ -113,19 +104,30 @@ export function generateHtmlReport(data, options = {}) {
         <th>P95</th>
         <th>Max</th>
       </tr>
-      ${['authentication', 'origin_step', 'commodity_step', 'purpose_step', 'transport_step', 'review_and_save', 'change_flow', 'submit']
-        .map(groupName => {
-          const metricName = `group_duration{group:::${groupName}}`;
-          const metric = metrics[metricName];
-          if (!metric) return '';
-          const m = metric.values;
+      ${[
+        { metric: 'authorisation_duration', label: 'Authorisation' },
+        { metric: 'get_home_page_step_duration', label: 'Home Page' },
+        { metric: 'get_dashboard_step_duration', label: 'Dashboard' },
+        { metric: 'get_country_of_origin_step_duration', label: 'Get Country of Origin' },
+        { metric: 'post_country_of_origin_step_duration', label: 'Submit Country of Origin' },
+        { metric: 'get_commodity_selection_step_duration', label: 'Commodity Code Selection' },
+        { metric: 'get_commodity_species_step_duration', label: 'Commodity Species Selection' },
+        { metric: 'get_commodity_quantities_step_duration', label: 'Commodity Quantities' },
+        { metric: 'post_purpose_step_duration', label: 'Purpose' },
+        { metric: 'post_transport_step_duration', label: 'Transport' },
+        { metric: 'post_save_step_duration', label: 'Save as Draft' },
+        { metric: 'post_submit_step_duration', label: 'Submit Notification' }
+      ].map(({ metric, label }) => {
+          const m = metrics[metric];
+          if (!m || !m.values) return '';
+          const values = m.values;
           return `
       <tr>
-        <td>${groupName.replace(/_/g, ' ')}</td>
-        <td class="metric-value">${(m.avg/1000).toFixed(2) || 'N/A'}s</td>
-        <td class="metric-value">${(m.min/1000).toFixed(2) || 'N/A'}s</td>
-        <td class="metric-value">${(m['p(95)']/1000).toFixed(2) || 'N/A'}s</td>
-        <td class="metric-value">${(m.max/1000).toFixed(2) || 'N/A'}s</td>
+        <td>${label}</td>
+        <td class="metric-value">${values.avg?.toFixed(2) || 'N/A'} ms</td>
+        <td class="metric-value">${values.min?.toFixed(2) || 'N/A'} ms</td>
+        <td class="metric-value">${values['p(95)']?.toFixed(2) || 'N/A'} ms</td>
+        <td class="metric-value">${values.max?.toFixed(2) || 'N/A'} ms</td>
       </tr>
           `;
         }).filter(row => row !== '').join('')}
@@ -135,15 +137,20 @@ export function generateHtmlReport(data, options = {}) {
     <table>
       <tr>
         <th>Endpoint</th>
-        <th>Count</th>
         <th>Average</th>
         <th>P95</th>
         <th>Max</th>
         <th>Threshold</th>
       </tr>
       ${[
+        { name: 'GetHomePage', label: 'Get Home Page', threshold: 200 },
+        { name: 'GetDashboardPage', label: 'Get Dashboard', threshold: 200 },
         { name: 'GetOriginPage', label: 'Get Origin Page', threshold: 400 },
         { name: 'SubmitOriginPage', label: 'Submit Origin', threshold: 600 },
+        { name: 'CommodityCodeSelection', label: 'Get Commodity Selection', threshold: 600 },
+        { name: 'SelectCommoditySpecies', label: 'Get Commodity Species', threshold: 600 },
+        { name: 'SaveCommodityQuantities', label: 'Get Commodity Quantities', threshold: 600 },
+        { name: 'SubmitPurpose', label: 'Submit Purpose', threshold: 600 },
         { name: 'GetReviewPage', label: 'Get Review Page', threshold: 500 },
         { name: 'SaveDraft', label: 'Save as Draft', threshold: 800 },
         { name: 'SubmitNotification', label: 'Submit Notification', threshold: 1000 }
@@ -157,7 +164,6 @@ export function generateHtmlReport(data, options = {}) {
           return `
       <tr>
         <td>${label}</td>
-        <td class="metric-value">${m.count || 'N/A'}</td>
         <td class="metric-value">${m.avg?.toFixed(2) || 'N/A'} ms</td>
         <td class="metric-value ${!withinThreshold ? 'fail' : ''}">${p95} ms</td>
         <td class="metric-value">${m.max?.toFixed(2) || 'N/A'} ms</td>
@@ -167,7 +173,7 @@ export function generateHtmlReport(data, options = {}) {
         }).filter(row => row !== '').join('')}
     </table>
 
-    <h2>Journey Metrics</h2>
+    <h2>Overall Journey Metrics</h2>
     <table>
       <tr>
         <th>Metric</th>
@@ -176,13 +182,14 @@ export function generateHtmlReport(data, options = {}) {
         <th>P99</th>
         <th>Max</th>
       </tr>
-      ${[...journeyMetrics, 'http_req_duration']
+      ${['notification_journey_duration', 'http_req_duration']
         .filter(name => metrics[name])
         .map(name => {
           const m = metrics[name].values;
+          const label = name === 'notification_journey_duration' ? 'Total Journey Duration' : 'HTTP Request Duration';
           return `
       <tr>
-        <td>${name.replace(/_/g, ' ')}</td>
+        <td>${label}</td>
         <td class="metric-value">${m.avg?.toFixed(2) || 'N/A'} ms</td>
         <td class="metric-value">${m['p(95)']?.toFixed(2) || 'N/A'} ms</td>
         <td class="metric-value">${m['p(99)']?.toFixed(2) || 'N/A'} ms</td>
@@ -203,7 +210,7 @@ export function generateHtmlReport(data, options = {}) {
         .map(([name, metric]) => {
           return Object.entries(metric.thresholds).map(([threshold, result]) => `
       <tr>
-        <td>${name}: ${threshold}</td>
+        <td>${formatThreshold(name, threshold)}</td>
         <td class="${result.ok ? 'pass' : 'fail'}">${result.ok ? '&#x2705; PASS' : '&#x274C; FAIL'}</td>
       </tr>
           `).join('');
@@ -217,12 +224,15 @@ export function generateHtmlReport(data, options = {}) {
         <th>Failures</th>
       </tr>
       ${[
-        { metric: 'origin_page_failures', label: 'Origin Page' },
-        { metric: 'commodity_page_failures', label: 'Commodity Page' },
-        { metric: 'purpose_page_failures', label: 'Purpose Page' },
-        { metric: 'transport_page_failures', label: 'Transport Page' },
-        { metric: 'review_page_failures', label: 'Review Page' },
-        { metric: 'save_failures', label: 'Save as Draft' },
+        { metric: 'authorisation_failures', label: 'Authorisation'},
+        { metric: 'home_page_failures', label: 'Home Page'},
+        { metric: 'dashboard_page_failures', label: 'Dashboard' },
+        { metric: 'country_of_origin_failures', label: 'Country of Origin' },
+        { metric: 'commodity_page_failures', label: 'Commodity' },
+        { metric: 'purpose_page_failures', label: 'Purpose' },
+        { metric: 'transport_page_failures', label: 'Transport' },
+        { metric: 'review_page_failures', label: 'Review'},
+        { metric: 'save_failures', label: 'Save' },
         { metric: 'submit_failures', label: 'Submit' }
       ].map(({ metric, label }) => {
           const values = metrics[metric]?.values || {};
@@ -249,7 +259,7 @@ export function generateHtmlReport(data, options = {}) {
           const values = metric.values || {};
           return `
       <tr>
-        <td>${name}</td>
+        <td>${formatMetricName(name)}</td>
         <td class="metric-value">${values.count || 'N/A'}</td>
         <td class="metric-value">${values.rate ? values.rate.toFixed(4) : 'N/A'}</td>
       </tr>
@@ -435,6 +445,119 @@ function extractWorkloadConfig(data) {
 }
 
 /**
+ * Formats a metric name into human-readable text
+ * @param {string} metricName - K6 metric name (e.g., "successful_journey_counter")
+ * @returns {string} Human-readable metric name
+ */
+function formatMetricName(metricName) {
+  // Define specific mappings for common metrics
+  const metricMappings = {
+    'successful_journey_counter': 'Successful Journeys',
+    'failed_journey_counter': 'Failed Journeys',
+    'failed_journeys': 'Failed Journeys',
+    'http_req_failed': 'HTTP Request Failures',
+    'authorisation_failures': 'Authorisation Failures',
+    'auth_failures': 'Authentication Failures',
+    'home_page_failures': 'Home Page Failures',
+    'dashboard_page_failures': 'Dashboard Failures',
+    'country_of_origin_failures': 'Country of Origin Failures',
+    'commodity_page_failures': 'Commodity Page Failures',
+    'purpose_page_failures': 'Purpose Page Failures',
+    'transport_page_failures': 'Transport Page Failures',
+    'review_page_failures': 'Review Page Failures',
+    'save_failures': 'Save Failures',
+    'submit_failures': 'Submit Failures'
+  };
+
+  // Check if we have a specific mapping
+  if (metricMappings[metricName]) {
+    return metricMappings[metricName];
+  }
+
+  // Otherwise, apply generic formatting
+  return metricName
+    .replace(/_counter$/, '')      // Remove _counter suffix
+    .replace(/_failures$/, ' Failures')  // Convert _failures to Failures
+    .replace(/_/g, ' ')            // Replace underscores with spaces
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))  // Title case
+    .join(' ');
+}
+
+/**
+ * Formats a K6 threshold into human-readable text
+ * @param {string} metricName - K6 metric name (e.g., "http_req_duration{name:SubmitPurpose}")
+ * @param {string} threshold - Threshold expression (e.g., "p(95)<600")
+ * @returns {string} Human-readable threshold description
+ */
+function formatThreshold(metricName, threshold) {
+  // Extract the base metric type
+  let baseMetric = metricName.split('{')[0];
+
+  // Extract tag values (e.g., {name:SubmitPurpose})
+  const tagMatch = metricName.match(/\{([^}]+)\}/);
+  let tagValue = '';
+
+  if (tagMatch) {
+    const tags = tagMatch[1].split(',');
+    tags.forEach(tag => {
+      const [key, value] = tag.split(':');
+      if (key === 'name') {
+        // Convert camelCase or snake_case to Title Case with spaces
+        tagValue = value
+          .replace(/([A-Z])/g, ' $1')  // Add space before capitals
+          .replace(/_/g, ' ')           // Replace underscores with spaces
+          .trim();
+      }
+    });
+  }
+
+  // Format the base metric name
+  const metricLabels = {
+    'http_req_duration': 'Request Duration',
+    'http_req_failed': 'Request Failure Rate',
+    'http_reqs': 'Request Count',
+    'checks': 'Check Pass Rate',
+    'failed_journeys': 'Failed Journeys',
+    'auth_failures': 'Authentication Failures'
+  };
+
+  const metricLabel = metricLabels[baseMetric] || baseMetric.replace(/_/g, ' ');
+
+  // Format the threshold condition
+  let formattedThreshold = threshold
+    .replace(/p\((\d+)\)/g, 'P$1')  // p(95) → P95
+    .replace(/</g, ' < ')
+    .replace(/>/g, ' > ')
+    .replace(/==/g, ' = ')
+    .replace(/\s+/g, ' ')  // Normalize multiple spaces
+    .trim();
+
+  // Add units where appropriate
+  if (baseMetric.includes('duration')) {
+    // For duration metrics, add 'ms' only after the threshold value (after comparison operator)
+    formattedThreshold = formattedThreshold.replace(/(< |> |= )(\d+)(?!ms)/g, '$1$2ms');
+  }
+  if (baseMetric.includes('rate') || baseMetric.includes('failed')) {
+    // For rate metrics, convert decimals to percentages (but only values after comparison operators)
+    formattedThreshold = formattedThreshold.replace(/(< |> |= )(\d+\.?\d*)/g, (match, operator, value) => {
+      const val = parseFloat(value);
+      if (val < 1 && val > 0) {
+        return `${operator}${(val * 100).toFixed(1)}%`;
+      }
+      return match;
+    });
+  }
+
+  // Build the final label
+  if (tagValue) {
+    return `${tagValue} - ${metricLabel}: ${formattedThreshold}`;
+  } else {
+    return `${metricLabel}: ${formattedThreshold}`;
+  }
+}
+
+/**
  * Generates enhanced summary cards with executive insights
  * @param {Object} metrics - K6 metrics object
  * @returns {string} HTML for enhanced summary cards
@@ -443,7 +566,7 @@ function generateEnhancedSummaryCards(metrics) {
   const cards = [];
 
   // 1. Slowest Section - Find the group with highest average duration
-  const groupNames = ['authentication', 'origin_step', 'commodity_step', 'purpose_step', 'transport_step', 'review_and_save', 'change_flow', 'submit'];
+  const groupNames = ['Authorisation', 'Home page', 'Dashboard page', 'Country of Origin step', 'Commodity step', 'Purpose step', 'Transport step', 'Save step', 'Change flow step', 'Submit step'];
   let slowestGroup = { name: 'N/A', duration: 0 };
 
   groupNames.forEach(groupName => {
@@ -467,11 +590,14 @@ function generateEnhancedSummaryCards(metrics) {
 
   // 2. Most Failed Page - Find which page has most failures
   const pageFailures = [
-    { metric: 'origin_page_failures', label: 'Origin' },
+    { metric: 'authorisation_failures', label: 'Authorisation'},
+    { metric: 'home_page_failures', label: 'Home Page'},
+    { metric: 'dashboard_page_failures', label: 'Dashboard' },
+    { metric: 'country_of_origin_failures', label: 'Country of Origin' },
     { metric: 'commodity_page_failures', label: 'Commodity' },
     { metric: 'purpose_page_failures', label: 'Purpose' },
     { metric: 'transport_page_failures', label: 'Transport' },
-    { metric: 'review_page_failures', label: 'Review' },
+    { metric: 'review_page_failures', label: 'Review'},
     { metric: 'save_failures', label: 'Save' },
     { metric: 'submit_failures', label: 'Submit' }
   ];

@@ -20,10 +20,10 @@ case $K6_WORKLOAD in
     VUS_MAX=${VUS_MAX:-1}
     ;;
   load)
-    VUS_MAX=${VUS_MAX:-1}
+    VUS_MAX=${VUS_MAX:-50}
     ;;
   stress)
-    VUS_MAX=${VUS_MAX:-50}
+    VUS_MAX=${VUS_MAX:-200}
     ;;
   spike)
     VUS_MAX=${VUS_MAX:-300}
