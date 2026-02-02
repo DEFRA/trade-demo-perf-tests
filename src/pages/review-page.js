@@ -24,7 +24,9 @@ export class ReviewPage {
   validate(expectedCountry, expectedCommodity, expectedReason, expectedPurpose, expectedBcp) {
     console.log('==== Validating Review page...');
 
-    const response = http.get(this.url, {});
+    const response = http.get(this.url, {
+      tags: { name: 'GetReviewPage' }
+    });
 
     if (!check(response, {
       'Review page loaded': (r) => r.status === 200 && r.url.endsWith('/import/review')
@@ -109,7 +111,8 @@ export class ReviewPage {
         'Notification Submitted': (r) =>
           r.status === 200 && r.url.endsWith('/import/confirmation')
       },
-      'Submitting the Notification failed'
+      'Submitting the Notification failed',
+      { tags: { name: 'SubmitNotification' } }
     );
 
     // Additional validation for confirmation page content
@@ -134,7 +137,8 @@ export class ReviewPage {
       headers: {
         'Content-Type': 'application/json',
         'X-CSRF-Token': this.csrfToken  // CSRF token in header, not body!
-      }
+      },
+      tags: { name: 'SaveDraft' }
     }
 
     const jsonResponse = postRestWithValidation(
@@ -150,7 +154,7 @@ export class ReviewPage {
     if (!check(jsonResponse, {
       'Draft saved successfully': (j) => j.success && j.message === 'Draft saved successfully'
     })) {
-      throw new TestingError('Draft not saved successully');
+      throw new TestingError('Draft not saved successfully');
     }
     console.log(`✓ Draft saved successfully. ID: ${jsonResponse.notificationId || 'new'}`);
   }

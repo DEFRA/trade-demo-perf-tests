@@ -1,18 +1,18 @@
 const config = {
-  // 12 iterations of the user journey over 15 mins (average volume of traffic)
+  // 12 iterations of the user journey over 10 mins (average volume of traffic)
   load: {
     executor: 'constant-arrival-rate',
-    duration: '15m',
+    duration: '10m',
     preAllocatedVUs: 1,
     rate: 12,
-    timeUnit: '15m',
+    timeUnit: '10m',
   },
   // ramp up to 50 users over 1 minute.  Constant 50 users for 15 minutes and a ramp down to 0 for the last minute.
   stress: {
     executor: 'ramping-vus',
     stages: [
-      {duration: '30s', target: 50},
-      {duration: '15m', target: 50},
+      {duration: '1m', target: 200},
+      {duration: '30m', target: 200},
       {duration: '1m', target: 0},
     ],
     gracefulRampDown: '30s',
@@ -21,7 +21,8 @@ const config = {
   spike: {
     executor: 'ramping-vus',
     stages: [
-      {duration: '1m', target: 300},
+      {duration: '30s', target: 200},
+      {duration: '1m', target: 200},
       {duration: '30s', target: 0},
     ],
   },
@@ -29,7 +30,7 @@ const config = {
   smoke: {
     executor: 'per-vu-iterations',
     vus: 1,
-    iterations: 1,
+    iterations: 5,
   },
 };
 

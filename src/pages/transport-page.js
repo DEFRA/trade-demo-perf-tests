@@ -34,7 +34,8 @@ export class TransportPage {
         'Transport submitted': (r) =>
           r.status === 200 && r.url.endsWith('/import/review')
       },
-      'Saving the Means of Transport failed'
+      'Saving the Means of Transport failed',
+    { tags: { name: 'SubmitTransportPage' } }
     );
 
     return extractCrumbOrThrow(response, 'Transport submission');

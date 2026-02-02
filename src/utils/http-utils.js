@@ -40,7 +40,7 @@ export function getRandomString(length = 10) {
  * @param {string} url - URL to request
  * @param {object} checkConditions - K6 check conditions
  * @param {string} errorMessage - Error message if check fails
- * @param {object} options - Additional K6 request options
+ * @param {object} options - Additional K6 request options (can include tags)
  * @returns {object} HTTP response
  * @throws {TestingError} If check conditions fail
  */

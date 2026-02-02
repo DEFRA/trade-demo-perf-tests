@@ -16,7 +16,8 @@ export class HomePage {
     getWithValidation(
       this.url,
       { 'Home Page loaded': (r) => r.status === 200 && r.url === this.baseUrl },
-      'Loading the Home Page failed'
+      'Loading the Home Page failed',
+      { tags: { name: 'GetHomePage' } }
     );
   }
 }
